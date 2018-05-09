@@ -27,8 +27,6 @@ WindowHandle g_hSecondaryWindow = nullptr;
 
 unsigned int g_VBO = 0;
 unsigned int g_IBO = 0;
-unsigned int g_Texture = 0;
-unsigned int g_Shader = 0;
 glm::mat4	g_ModelMatrix;
 
 std::thread *g_tpWin2 = nullptr;
@@ -49,6 +47,7 @@ int MainLoopBAD();
 int MainLoopTHREADED();
 void ChildLoop(WindowHandle a_toWindow);
 void Render(WindowHandle a_toWindow);
+void IndependantRenderLoop(WindowHandle a_toWindow);
 int ShutDown();
 
 void GLFWErrorCallback(int a_iError, const char* a_szDiscription);
@@ -82,12 +81,12 @@ int main()
 	This loop will try to render from both threads simultaneously.
 	WARNING: RUN AT YOUR OWN RISK. I have had this loop crash on several occasions,
 	it is not stable and is only here as an example on how not to do it. */
-	//iReturnCode = MainLoopBAD();
+	iReturnCode = MainLoopBAD();
 
 	/* This loop is a working/stable example of how to render from multipul threads. 
 	Notice that this does NOT render from both threads at the same time. 
 	*/
-	iReturnCode = MainLoopTHREADED();
+	//iReturnCode = MainLoopTHREADED();
 
 
 	if (iReturnCode != EC_NO_ERROR)
@@ -100,57 +99,8 @@ int main()
 	return iReturnCode;
 }
 
-
-int Init()
+void InitShader(WindowHandle a_hWindowHandle) 
 {
-	// Setup Our GLFW error callback, we do this before Init so we know what goes wrong with init if it fails:
-	glfwSetErrorCallback(GLFWErrorCallback);
-
-	// Init GLFW:
-	if (!glfwInit())
-		return EC_GLFW_INIT_FAIL;
-
-	// create our first window:
-	g_hPrimaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, c_szDefaultPrimaryWindowTitle, nullptr, nullptr);
-	
-	if (g_hPrimaryWindow == nullptr)
-	{
-		glfwTerminate();
-		return EC_GLFW_FIRST_WINDOW_CREATION_FAIL;
-	}
-
-	// Print out GLFW, OpenGL version and GLEW Version:
-	int iOpenGLMajor = glfwGetWindowAttrib(g_hPrimaryWindow->m_pWindow, GLFW_CONTEXT_VERSION_MAJOR);
-	int iOpenGLMinor = glfwGetWindowAttrib(g_hPrimaryWindow->m_pWindow, GLFW_CONTEXT_VERSION_MINOR);
-	int iOpenGLRevision = glfwGetWindowAttrib(g_hPrimaryWindow->m_pWindow, GLFW_CONTEXT_REVISION);
-	printf("Status: Using GLFW Version %s\n", glfwGetVersionString());
-	printf("Status: Using OpenGL Version: %i.%i, Revision: %i\n", iOpenGLMajor, iOpenGLMinor, iOpenGLRevision);
-	printf("Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
-
-	// create our second window:
-	g_hSecondaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, c_szDefaultSecondaryWindowTitle, nullptr, g_hPrimaryWindow);
-	
-	MakeContextCurrent(g_hPrimaryWindow);
-
-	// start creating our quad data for later use:
-	std::future<Quad> fQuad = std::async(std::launch::async, CreateQuad);
-	glm::vec4 *ptexData = new glm::vec4[256 * 256];
-	std::future<glm::vec4*> ftexData = std::async(std::launch::async, [ptexData] () -> glm::vec4*
-	{
-		for (int i = 0; i < 256 * 256; i += 256)
-		{
-			for (int j = 0; j < 256; ++j)
-			{
-				if (j % 2 == 0)
-					ptexData[i + j] = glm::vec4(0, 0, 0, 1);
-				else
-					ptexData[i + j] = glm::vec4(1, 1, 1, 1);
-			}
-		}
-
-		return ptexData;
-	} );
-
 	// create shader:
 	GLint iSuccess = 0;
 	GLchar acLog[256];
@@ -179,21 +129,21 @@ int Init()
 		printf("\n");
 	}
 
-	g_Shader = glCreateProgram();
-	glAttachShader(g_Shader, vsHandle);
-	glAttachShader(g_Shader, fsHandle);
+	a_hWindowHandle->m_shaderId = glCreateProgram();
+	glAttachShader(a_hWindowHandle->m_shaderId, vsHandle);
+	glAttachShader(a_hWindowHandle->m_shaderId, fsHandle);
 	glDeleteShader(vsHandle);
 	glDeleteShader(fsHandle);
 
 	// specify Vertex Attribs:
-	glBindAttribLocation(g_Shader, 0, "Position");
-	glBindAttribLocation(g_Shader, 1, "UV");
-	glBindAttribLocation(g_Shader, 2, "Colour");
-	glBindFragDataLocation(g_Shader, 0, "outColour");
+	glBindAttribLocation(a_hWindowHandle->m_shaderId, 0, "Position");
+	glBindAttribLocation(a_hWindowHandle->m_shaderId, 1, "UV");
+	glBindAttribLocation(a_hWindowHandle->m_shaderId, 2, "Colour");
+	glBindFragDataLocation(a_hWindowHandle->m_shaderId, 0, "outColour");
 
-	glLinkProgram(g_Shader);
-	glGetProgramiv(g_Shader, GL_LINK_STATUS, &iSuccess);
-	glGetProgramInfoLog(g_Shader, sizeof(acLog), 0, acLog);
+	glLinkProgram(a_hWindowHandle->m_shaderId);
+	glGetProgramiv(a_hWindowHandle->m_shaderId, GL_LINK_STATUS, &iSuccess);
+	glGetProgramInfoLog(a_hWindowHandle->m_shaderId, sizeof(acLog), 0, acLog);
 	if (iSuccess == GL_FALSE)
 	{
 		printf("Error: failed to link Shader Program!\n");
@@ -201,25 +151,39 @@ int Init()
 		printf("\n");
 	}
 
-	glUseProgram(g_Shader);
+}
 
-	auto* texData = ftexData.get();
+void InitTexAndVertex(WindowHandle a_hWindowHandle)
+{
+	Quad fQuad = CreateQuad();
+	glm::vec4 *ptexData = new glm::vec4[256 * 256];
+	for (int i = 0; i < 256 * 256; i += 256)
+	{
+		for (int j = 0; j < 256; ++j)
+		{
+			if (j % 2 == 0)
+				ptexData[i + j] = glm::vec4(0, 0, 0, 1);
+			else
+				ptexData[i + j] = glm::vec4(1, 1, 1, 1);
+		}
+	}
 
-	glGenTextures( 1, &g_Texture );
-	glBindTexture( GL_TEXTURE_2D, g_Texture );
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 256, 256, 0, GL_RGBA, GL_FLOAT, texData);
+
+	glGenTextures(1, &a_hWindowHandle->m_textureId);
+	glBindTexture(GL_TEXTURE_2D, a_hWindowHandle->m_textureId);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 256, 256, 0, GL_RGBA, GL_FLOAT, ptexData);
 
 	delete ptexData;
 
 	// specify default filtering and wrapping
-	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
-	glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 	// set the texture to use slot 0 in the shader
-	GLuint texUniformID = glGetUniformLocation(g_Shader,"diffuseTexture");
-	glUniform1i(texUniformID,0);
+	GLuint texUniformID = glGetUniformLocation(a_hWindowHandle->m_shaderId, "diffuseTexture");
+	glUniform1i(texUniformID, 0);
 
 	// Create VBO/IBO
 	glGenBuffers(1, &g_VBO);
@@ -227,16 +191,61 @@ int Init()
 	glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_IBO);
 
-	// get the quad from the future:
-	Quad temp = fQuad.get();
 
-	glBufferData(GL_ARRAY_BUFFER, temp.c_uiNoOfVerticies * sizeof(Vertex), temp.m_Verticies, GL_STATIC_DRAW);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, temp.c_uiNoOfIndicies * sizeof(unsigned int), temp.m_uiIndicies, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, fQuad.c_uiNoOfVerticies * sizeof(Vertex), fQuad.m_Verticies, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, fQuad.c_uiNoOfIndicies * sizeof(unsigned int), fQuad.m_uiIndicies, GL_STATIC_DRAW);
 
+}
+
+void InitWindow(WindowHandle a_hWindowHandle)
+{
+	MakeContextCurrent(a_hWindowHandle);
+	// start creating our quad data for later use:
+	InitShader(a_hWindowHandle);
+	glUseProgram(a_hWindowHandle->m_shaderId);
+	InitTexAndVertex(a_hWindowHandle);
+}
+
+int Init()
+{
+	// Setup Our GLFW error callback, we do this before Init so we know what goes wrong with init if it fails:
+	glfwSetErrorCallback(GLFWErrorCallback);
+
+	// Init GLFW:
+	if (!glfwInit())
+		return EC_GLFW_INIT_FAIL;
+
+	// create our first window:
+	g_hPrimaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, c_szDefaultPrimaryWindowTitle, nullptr, nullptr);
+	
+	if (g_hPrimaryWindow == nullptr)
+	{
+		glfwTerminate();
+		return EC_GLFW_FIRST_WINDOW_CREATION_FAIL;
+	}
+
+	// Print out GLFW, OpenGL version and GLEW Version:
+	int iOpenGLMajor = glfwGetWindowAttrib(g_hPrimaryWindow->m_pWindow, GLFW_CONTEXT_VERSION_MAJOR);
+	int iOpenGLMinor = glfwGetWindowAttrib(g_hPrimaryWindow->m_pWindow, GLFW_CONTEXT_VERSION_MINOR);
+	int iOpenGLRevision = glfwGetWindowAttrib(g_hPrimaryWindow->m_pWindow, GLFW_CONTEXT_REVISION);
+	printf("Status: Using GLFW Version %s\n", glfwGetVersionString());
+	printf("Status: Using OpenGL Version: %i.%i, Revision: %i\n", iOpenGLMajor, iOpenGLMinor, iOpenGLRevision);
+	printf("Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
+
+	// create our second window:
+	g_hSecondaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, c_szDefaultSecondaryWindowTitle, nullptr, nullptr);
+	
+
+
+	InitWindow(g_hPrimaryWindow);
+	InitWindow(g_hSecondaryWindow);
+
+	MakeContextCurrent(g_hPrimaryWindow);
 	// Now do window specific stuff, including:
 	// --> Creating a VAO with the VBO/IBO created above!
 	// --> Setting Up Projection and View Matricies!
 	// --> Specifing OpenGL Options for the window!
+	static bool bFirst = true;
 	for (auto window : g_lWindows)
 	{
 		MakeContextCurrent(window);
@@ -261,7 +270,15 @@ int Init()
 
 		// set OpenGL Options:
 		glViewport(0, 0, window->m_uiWidth, window->m_uiHeight);
-		glClearColor(0.25f,0.25f,0.25f,1);
+		if (bFirst)
+		{
+			glClearColor(0.0f, 0.0f, 0.25f, 1);
+			bFirst = false;
+		}
+		else
+		{
+			glClearColor(0.25f, 0.0f, 0.f, 1);
+		}
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_CULL_FACE);
 
@@ -307,18 +324,18 @@ int MainLoop()
 			// clear the backbuffer to our clear colour and clear the depth buffer
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-			glUseProgram(g_Shader);
+			glUseProgram(window->m_shaderId);
 
-			GLuint ProjectionID = glGetUniformLocation(g_Shader,"Projection");
-			GLuint ViewID = glGetUniformLocation(g_Shader,"View");
-			GLuint ModelID = glGetUniformLocation(g_Shader,"Model");
+			GLuint ProjectionID = glGetUniformLocation(window->m_shaderId,"Projection");
+			GLuint ViewID = glGetUniformLocation(window->m_shaderId,"View");
+			GLuint ModelID = glGetUniformLocation(window->m_shaderId,"Model");
 
 			glUniformMatrix4fv(ProjectionID, 1, false, glm::value_ptr(window->m_m4Projection));
 			glUniformMatrix4fv(ViewID, 1, false, glm::value_ptr(window->m_m4ViewMatrix));
 			glUniformMatrix4fv(ModelID, 1, false, glm::value_ptr(g_ModelMatrix));
 
 			glActiveTexture(GL_TEXTURE0);
-			glBindTexture( GL_TEXTURE_2D, g_Texture );
+			glBindTexture( GL_TEXTURE_2D, window->m_textureId );
 			glBindVertexArray(g_mVAOs[window->m_uiID]);
 			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -341,8 +358,21 @@ int MainLoopBAD()
 {
 	std::cout << "Entering main loop on thread ID: " << std::this_thread::get_id() << std::endl;
 
-	MakeContextCurrent(g_hPrimaryWindow);
+	WindowHandle win1 = g_hPrimaryWindow;
+	WindowHandle win2 = g_hSecondaryWindow;
 
+#define MAKE_IT_WORK 1
+#if MAKE_IT_WORK
+	MakeContextCurrent(win1);
+	std::thread renderWindow2(&IndependantRenderLoop, win2);
+#else
+	std::thread renderWindow2(&IndependantRenderLoop, win2);
+	/*this doesn't work at the moment.
+	I believe it has something to do with thes std::map inside MakeContextCurrent implementation..
+	didn't have the time to look.
+	*/
+	MakeContextCurrent(win1);
+#endif
 	while (!ShouldClose())
 	{
 		// Keep Running!
@@ -353,19 +383,12 @@ int MainLoopBAD()
 		g_ModelMatrix = glm::rotate(identity, fDeltaTime * 10.0f, glm::vec3(0.0f, 1.0f, 0.0f));
 
 		// render threaded.
-		std::thread renderWindow2(&Render, g_hSecondaryWindow);
-		Render(g_hPrimaryWindow);
-
-		// calc FPS:
-		CalcFPS(g_hSecondaryWindow);
-		CalcFPS(g_hPrimaryWindow);
+		Render(win1);
 
 		// join second render thread
-		renderWindow2.join();
-
 		glfwPollEvents(); // process events!
 	}
-
+	renderWindow2.join();
 	std::cout << "Exiting main loop on thread ID: " << std::this_thread::get_id() << std::endl;
 
 	return EC_NO_ERROR;
@@ -454,25 +477,44 @@ void ChildLoop(WindowHandle a_toWindow)
 }
 
 
-void Render(WindowHandle a_toWindow)
+void IndependantRenderLoop(WindowHandle a_toWindow)
 {
 	MakeContextCurrent(a_toWindow);
+
+	while (!ShouldClose())
+	{
+		// Keep Running!
+		// get delta time for this iteration:
+		float fDeltaTime = (float)glfwGetTime();
+
+		glm::mat4 identity;
+		g_ModelMatrix = glm::rotate(identity, fDeltaTime * 10.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+
+		// render threaded.
+		Render(a_toWindow);
+	}
+
+	std::cout << "Exiting main loop on thread ID: " << std::this_thread::get_id() << std::endl;
+}
+
+void Render(WindowHandle a_toWindow)
+{
 		
 	// clear the backbuffer to our clear colour and clear the depth buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glUseProgram(g_Shader);
+	glUseProgram(a_toWindow->m_shaderId);
 
-	GLuint ProjectionID = glGetUniformLocation(g_Shader,"Projection");
-	GLuint ViewID = glGetUniformLocation(g_Shader,"View");
-	GLuint ModelID = glGetUniformLocation(g_Shader,"Model");
+	GLuint ProjectionID = glGetUniformLocation(a_toWindow->m_shaderId,"Projection");
+	GLuint ViewID = glGetUniformLocation(a_toWindow->m_shaderId,"View");
+	GLuint ModelID = glGetUniformLocation(a_toWindow->m_shaderId,"Model");
 
 	glUniformMatrix4fv(ProjectionID, 1, false, glm::value_ptr(a_toWindow->m_m4Projection));
 	glUniformMatrix4fv(ViewID, 1, false, glm::value_ptr(a_toWindow->m_m4ViewMatrix));
 	glUniformMatrix4fv(ModelID, 1, false, glm::value_ptr(g_ModelMatrix));
 
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture( GL_TEXTURE_2D, g_Texture );
+	glBindTexture( GL_TEXTURE_2D, a_toWindow->m_textureId);
 	glBindVertexArray(g_mVAOs[a_toWindow->m_uiID]);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
@@ -529,6 +571,7 @@ void MakeContextCurrent(WindowHandle a_hWindowHandle)
 		std::thread::id thread = std::this_thread::get_id();
 
 		glfwMakeContextCurrent(a_hWindowHandle->m_pWindow);
+		// not cool, not cool... !#@%!@$
 		g_mCurrentContextMap[thread] = a_hWindowHandle;
 	}
 }
@@ -604,12 +647,13 @@ WindowHandle CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTi
 	glfwSetWindowSizeCallback(newWindow->m_pWindow, GLFWWindowSizeCallback);
 
 	 // setup openGL Error callback:
-    if (GLEW_ARB_debug_output) // test to make sure we can use the new callbacks, they wer added as an extgension in 4.1 and as a core feture in 4.3
+	const bool use_glErrCallback = false;
+    if (use_glErrCallback&&GLEW_ARB_debug_output) // test to make sure we can use the new callbacks, they wer added as an extgension in 4.1 and as a core feture in 4.3
     {
             #ifdef _DEBUG
             glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);                        // this allows us to set a break point in the callback function, no point to it if in release mode.
             #endif
-            glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);        // tell openGl what errors we want (all).
+			glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);        // tell openGl what errors we want (all).
             glDebugMessageCallback(GLErrorCallback, NULL);                        // define the callback function.
     }
 

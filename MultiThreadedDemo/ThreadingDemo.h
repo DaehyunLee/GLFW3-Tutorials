@@ -37,6 +37,9 @@ struct Window
 	glm::mat4		m_m4ViewMatrix;
 
 	unsigned int	m_uiID;
+
+	unsigned int	m_shaderId;
+	unsigned int	m_textureId;
 };
 typedef Window* WindowHandle;
 
