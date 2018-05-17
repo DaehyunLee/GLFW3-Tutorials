@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <map>
 #include <list>
+#include <array>
 #include <thread>
 #include <future>
 #include <atomic>
@@ -24,6 +25,7 @@ std::map<std::thread::id, WindowHandle> g_mCurrentContextMap;	// store current c
 
 WindowHandle g_hPrimaryWindow = nullptr;
 WindowHandle g_hSecondaryWindow = nullptr;
+WindowHandle g_hThirdWindow = nullptr;
 
 unsigned int g_VBO = 0;
 unsigned int g_IBO = 0;
@@ -42,10 +44,7 @@ std::map<unsigned int, FPSData*> m_mFPSData;
 Quad CreateQuad();
 
 int Init();
-int MainLoop();
 int MainLoopBAD();
-int MainLoopTHREADED();
-void ChildLoop(WindowHandle a_toWindow);
 void Render(WindowHandle a_toWindow);
 void IndependantRenderLoop(WindowHandle a_toWindow);
 int ShutDown();
@@ -82,13 +81,6 @@ int main()
 	WARNING: RUN AT YOUR OWN RISK. I have had this loop crash on several occasions,
 	it is not stable and is only here as an example on how not to do it. */
 	iReturnCode = MainLoopBAD();
-
-	/* This loop is a working/stable example of how to render from multipul threads. 
-	Notice that this does NOT render from both threads at the same time. 
-	*/
-	//iReturnCode = MainLoopTHREADED();
-
-
 	if (iReturnCode != EC_NO_ERROR)
 		return iReturnCode;
 
@@ -216,7 +208,7 @@ int Init()
 		return EC_GLFW_INIT_FAIL;
 
 	// create our first window:
-	g_hPrimaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, c_szDefaultPrimaryWindowTitle, nullptr, nullptr);
+	g_hPrimaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - Primary Window", nullptr, nullptr);
 	
 	if (g_hPrimaryWindow == nullptr)
 	{
@@ -233,18 +225,24 @@ int Init()
 	printf("Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 
 	// create our second window:
-	g_hSecondaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, c_szDefaultSecondaryWindowTitle, nullptr, nullptr);
-	
-
+	g_hSecondaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - secondary Window", nullptr, nullptr);
+	g_hThirdWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - third Window", nullptr, nullptr);
 
 	InitWindow(g_hPrimaryWindow);
 	InitWindow(g_hSecondaryWindow);
+	InitWindow(g_hThirdWindow);
 
 	MakeContextCurrent(g_hPrimaryWindow);
 	// Now do window specific stuff, including:
 	// --> Creating a VAO with the VBO/IBO created above!
 	// --> Setting Up Projection and View Matricies!
 	// --> Specifing OpenGL Options for the window!
+	const std::array<float[3], 3> colors = { {
+		{ 0.0f, 0.0f, 0.25f },
+		{ 0.25f, 0.0f, 0.25f },
+		{ 0.0f, 0.25f, 0.f },
+	} };
+
 	static bool bFirst = true;
 	for (auto window : g_lWindows)
 	{
@@ -270,15 +268,8 @@ int Init()
 
 		// set OpenGL Options:
 		glViewport(0, 0, window->m_uiWidth, window->m_uiHeight);
-		if (bFirst)
-		{
-			glClearColor(0.0f, 0.0f, 0.25f, 1);
-			bFirst = false;
-		}
-		else
-		{
-			glClearColor(0.25f, 0.0f, 0.f, 1);
-		}
+		int idx = window->m_uiID%colors.size();
+		glClearColor(colors[idx][0], colors[idx][1], colors[idx][2], 1);
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_CULL_FACE);
 
@@ -291,7 +282,6 @@ int Init()
 		fpsData->m_fCurrnetRunTime = (float)glfwGetTime();
 		m_mFPSData[window->m_uiID] = fpsData;
 	}
-
 	std::cout << "Init completed on thread ID: " << std::this_thread::get_id() << std::endl;
 
 	return EC_NO_ERROR;
@@ -360,121 +350,30 @@ int MainLoopBAD()
 
 	WindowHandle win1 = g_hPrimaryWindow;
 	WindowHandle win2 = g_hSecondaryWindow;
+	WindowHandle win3 = g_hThirdWindow;
 
-#define MAKE_IT_WORK 1
-#if MAKE_IT_WORK
-	MakeContextCurrent(win1);
+	glfwMakeContextCurrent(NULL);
+	std::thread renderWindow1(&IndependantRenderLoop, win1);
 	std::thread renderWindow2(&IndependantRenderLoop, win2);
-#else
-	std::thread renderWindow2(&IndependantRenderLoop, win2);
-	/*this doesn't work at the moment.
-	I believe it has something to do with thes std::map inside MakeContextCurrent implementation..
-	didn't have the time to look.
-	*/
-	MakeContextCurrent(win1);
-#endif
+	std::thread renderWindow3(&IndependantRenderLoop, win3);
+
 	while (!ShouldClose())
 	{
 		// Keep Running!
 		// get delta time for this iteration:
 		float fDeltaTime = (float)glfwGetTime();
 
-		glm::mat4 identity;
-		g_ModelMatrix = glm::rotate(identity, fDeltaTime * 10.0f, glm::vec3(0.0f, 1.0f, 0.0f));
-
-		// render threaded.
-		Render(win1);
-
 		// join second render thread
 		glfwPollEvents(); // process events!
 	}
+	renderWindow1.join();
 	renderWindow2.join();
+	renderWindow3.join();
 	std::cout << "Exiting main loop on thread ID: " << std::this_thread::get_id() << std::endl;
 
 	return EC_NO_ERROR;
 }
 
-
-int MainLoopTHREADED()
-{
-	std::cout << "Entering main loop on thread ID: " << std::this_thread::get_id() << std::endl;
-
-	// init the sync fece to something so the initial render pass for the main thread wuill work:
-	g_SecondThreadFenceSync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
-
-	g_bShouldClose = ShouldClose();
-	while (!g_bShouldClose)
-	{
-		// Keep Running!
-		// get delta time for this iteration:
-		float fDeltaTime = (float)glfwGetTime();
-
-		glm::mat4 identity;
-		g_ModelMatrix = glm::rotate(identity, fDeltaTime * 10.0f, glm::vec3(0.0f, 1.0f, 0.0f));
-
-		// simulate work:
-		if (g_bDoWork)
-		{
-			std::chrono::milliseconds dura( 3 );
-			std::this_thread::sleep_for( dura );
-		}
-
-		g_RenderLock.lock();
-		glWaitSync(g_SecondThreadFenceSync, 0, GL_TIMEOUT_IGNORED);				// tell the GPU to make sure that the second threads calls are in the pipline before adding ours!
-		glDeleteSync(g_SecondThreadFenceSync);
-		Render(g_hPrimaryWindow);
-		g_MainThreadFenceSync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);	// setup our fence sync for the other thread to wait on it.
-		g_RenderLock.unlock();
-
-		// calc FPS:
-		CalcFPS(g_hPrimaryWindow);
-
-		glfwPollEvents(); // process events!
-		g_bShouldClose = ShouldClose();  // check if we should close:
-
-		// spin off the thread for window 2 thread if it hasn't alread been done:
-		if (g_tpWin2 == nullptr)
-		{
-			g_tpWin2 = new std::thread(&ChildLoop, g_hSecondaryWindow);
-		}
-	}
-
-	std::cout << "Exiting main loop on thread ID: " << std::this_thread::get_id() << std::endl;
-
-	return EC_NO_ERROR;
-}
-
-
-void ChildLoop(WindowHandle a_toWindow)
-{
-	std::cout << "Starting Secondary Render Thread: " << std::this_thread::get_id() << std::endl;
-	MakeContextCurrent(g_hSecondaryWindow);
-
-	while(!g_bShouldClose)
-	{
-		if (g_MainThreadFenceSync == 0)
-		{
-			continue; // dont start rendering until the main thread has started rendering for the first time.
-		}
-
-		// simulate work:
-		if (g_bDoWork)
-		{
-			std::chrono::milliseconds dura( 3 );
-			std::this_thread::sleep_for( dura );
-		}
-
-		g_RenderLock.lock();
-		glWaitSync(g_MainThreadFenceSync, 0, GL_TIMEOUT_IGNORED);		// tell the GPU to make sure that the second threads calls are in the pipline before adding ours!
-		glDeleteSync(g_MainThreadFenceSync);
-		Render(a_toWindow);
-		g_SecondThreadFenceSync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);	// setup our fence sync for the other thread to wait on it.
-		g_RenderLock.unlock();
-
-		// calc FPS:
-		CalcFPS(g_hSecondaryWindow);
-	}
-}
 
 
 void IndependantRenderLoop(WindowHandle a_toWindow)
@@ -559,10 +458,8 @@ GLEWContext* glewGetContext()
 {
 	//return g_hCurrentContext->m_pGLEWContext;
 	std::thread::id thread = std::this_thread::get_id();
-
 	return g_mCurrentContextMap[thread]->m_pGLEWContext;
 }
-
 
 void MakeContextCurrent(WindowHandle a_hWindowHandle)
 {
@@ -573,6 +470,15 @@ void MakeContextCurrent(WindowHandle a_hWindowHandle)
 		glfwMakeContextCurrent(a_hWindowHandle->m_pWindow);
 		// not cool, not cool... !#@%!@$
 		g_mCurrentContextMap[thread] = a_hWindowHandle;
+
+		if (a_hWindowHandle->m_pWindow != glfwGetCurrentContext())
+		{
+			printf("context not as expected\n");
+		}
+	}
+	else
+	{
+		printf("something's mess up\n");
 	}
 }
 

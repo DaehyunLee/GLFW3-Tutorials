@@ -15,10 +15,6 @@
 const int c_iDefaultScreenWidth = 1280;
 const int c_iDefaultScreenHeight = 720;
 
-const char *c_szDefaultPrimaryWindowTitle = "Threading Demo - Primary Window";
-const char *c_szDefaultSecondaryWindowTitle = "Threading Demo - Secondary Window";
-
-
 ///////////////////// Custom Data Types ///////////////////////////////
 enum ExitCodes
 {
