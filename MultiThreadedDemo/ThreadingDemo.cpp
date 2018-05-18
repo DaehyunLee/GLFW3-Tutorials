@@ -19,24 +19,14 @@
 //////////////////////// global Vars //////////////////////////////
 unsigned int	g_uiWindowCounter = 0;							// used to set window IDs
 
-std::list<WindowHandle>					g_lWindows;
+std::list<Window*>					g_lWindows;
 std::map<unsigned int, unsigned int>	g_mVAOs;
-std::map<std::thread::id, WindowHandle> g_mCurrentContextMap;	// store current contex per thread!
-
-WindowHandle g_hPrimaryWindow = nullptr;
-WindowHandle g_hSecondaryWindow = nullptr;
-WindowHandle g_hThirdWindow = nullptr;
 
 unsigned int g_VBO = 0;
 unsigned int g_IBO = 0;
 glm::mat4	g_ModelMatrix;
-
-std::thread *g_tpWin2 = nullptr;
 std::mutex g_RenderLock;
-GLsync g_MainThreadFenceSync;
-GLsync g_SecondThreadFenceSync;
-std::atomic_bool g_bShouldClose;
-std::atomic_bool g_bDoWork;
+thread_local Window* g_currentThreadContext;
 
 std::map<unsigned int, FPSData*> m_mFPSData;
 
@@ -45,18 +35,18 @@ Quad CreateQuad();
 
 int Init();
 int MainLoopBAD();
-void Render(WindowHandle a_toWindow);
-void IndependantRenderLoop(WindowHandle a_toWindow);
+void Render(Window* a_toWindow);
+void IndependantRenderLoop(Window* a_toWindow);
 int ShutDown();
 
 void GLFWErrorCallback(int a_iError, const char* a_szDiscription);
 void GLFWWindowSizeCallback(GLFWwindow* a_pWindow, int a_iWidth, int a_iHeight);
 void APIENTRY GLErrorCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
 GLEWContext* glewGetContext();   // This needs to be defined for GLEW MX to work, along with the GLEW_MX define in the perprocessor!
-void CalcFPS(WindowHandle a_hWindowHandle);
+void CalcFPS(Window* a_hWindow);
 
-WindowHandle  CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, GLFWmonitor* a_pMonitor, WindowHandle a_hShare);
-void MakeContextCurrent(WindowHandle a_hWindowHandle);
+Window*  CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, GLFWmonitor* a_pMonitor, Window* a_hShare);
+void MakeContextCurrent(Window* a_hWindow);
 bool ShouldClose();
 
 
@@ -70,16 +60,6 @@ int main()
 		return iReturnCode;
 
 	// use this to simulate 3ms of work per window.
-	g_bDoWork = true;
-
-	/* Use the following loop to have this demo run like the
-	original Multi-Window tutorial code. its here for comparison. */
-	//iReturnCode = MainLoop();
-
-	/* My initial naive attempt at multithreading on a per window basis.
-	This loop will try to render from both threads simultaneously.
-	WARNING: RUN AT YOUR OWN RISK. I have had this loop crash on several occasions,
-	it is not stable and is only here as an example on how not to do it. */
 	iReturnCode = MainLoopBAD();
 	if (iReturnCode != EC_NO_ERROR)
 		return iReturnCode;
@@ -91,7 +71,7 @@ int main()
 	return iReturnCode;
 }
 
-void InitShader(WindowHandle a_hWindowHandle) 
+void InitShader(Window* a_hWindow) 
 {
 	// create shader:
 	GLint iSuccess = 0;
@@ -121,21 +101,21 @@ void InitShader(WindowHandle a_hWindowHandle)
 		printf("\n");
 	}
 
-	a_hWindowHandle->m_shaderId = glCreateProgram();
-	glAttachShader(a_hWindowHandle->m_shaderId, vsHandle);
-	glAttachShader(a_hWindowHandle->m_shaderId, fsHandle);
+	a_hWindow->m_shaderId = glCreateProgram();
+	glAttachShader(a_hWindow->m_shaderId, vsHandle);
+	glAttachShader(a_hWindow->m_shaderId, fsHandle);
 	glDeleteShader(vsHandle);
 	glDeleteShader(fsHandle);
 
 	// specify Vertex Attribs:
-	glBindAttribLocation(a_hWindowHandle->m_shaderId, 0, "Position");
-	glBindAttribLocation(a_hWindowHandle->m_shaderId, 1, "UV");
-	glBindAttribLocation(a_hWindowHandle->m_shaderId, 2, "Colour");
-	glBindFragDataLocation(a_hWindowHandle->m_shaderId, 0, "outColour");
+	glBindAttribLocation(a_hWindow->m_shaderId, 0, "Position");
+	glBindAttribLocation(a_hWindow->m_shaderId, 1, "UV");
+	glBindAttribLocation(a_hWindow->m_shaderId, 2, "Colour");
+	glBindFragDataLocation(a_hWindow->m_shaderId, 0, "outColour");
 
-	glLinkProgram(a_hWindowHandle->m_shaderId);
-	glGetProgramiv(a_hWindowHandle->m_shaderId, GL_LINK_STATUS, &iSuccess);
-	glGetProgramInfoLog(a_hWindowHandle->m_shaderId, sizeof(acLog), 0, acLog);
+	glLinkProgram(a_hWindow->m_shaderId);
+	glGetProgramiv(a_hWindow->m_shaderId, GL_LINK_STATUS, &iSuccess);
+	glGetProgramInfoLog(a_hWindow->m_shaderId, sizeof(acLog), 0, acLog);
 	if (iSuccess == GL_FALSE)
 	{
 		printf("Error: failed to link Shader Program!\n");
@@ -145,7 +125,7 @@ void InitShader(WindowHandle a_hWindowHandle)
 
 }
 
-void InitTexAndVertex(WindowHandle a_hWindowHandle)
+void InitTexAndVertex(Window* a_hWindow)
 {
 	Quad fQuad = CreateQuad();
 	glm::vec4 *ptexData = new glm::vec4[256 * 256];
@@ -161,8 +141,8 @@ void InitTexAndVertex(WindowHandle a_hWindowHandle)
 	}
 
 
-	glGenTextures(1, &a_hWindowHandle->m_textureId);
-	glBindTexture(GL_TEXTURE_2D, a_hWindowHandle->m_textureId);
+	glGenTextures(1, &a_hWindow->m_textureId);
+	glBindTexture(GL_TEXTURE_2D, a_hWindow->m_textureId);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 256, 256, 0, GL_RGBA, GL_FLOAT, ptexData);
 
 	delete ptexData;
@@ -174,7 +154,7 @@ void InitTexAndVertex(WindowHandle a_hWindowHandle)
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 	// set the texture to use slot 0 in the shader
-	GLuint texUniformID = glGetUniformLocation(a_hWindowHandle->m_shaderId, "diffuseTexture");
+	GLuint texUniformID = glGetUniformLocation(a_hWindow->m_shaderId, "diffuseTexture");
 	glUniform1i(texUniformID, 0);
 
 	// Create VBO/IBO
@@ -189,13 +169,24 @@ void InitTexAndVertex(WindowHandle a_hWindowHandle)
 
 }
 
-void InitWindow(WindowHandle a_hWindowHandle)
+void InitWindow(Window* a_hWindow)
 {
-	MakeContextCurrent(a_hWindowHandle);
+	MakeContextCurrent(a_hWindow);
 	// start creating our quad data for later use:
-	InitShader(a_hWindowHandle);
-	glUseProgram(a_hWindowHandle->m_shaderId);
-	InitTexAndVertex(a_hWindowHandle);
+	InitShader(a_hWindow);
+	glUseProgram(a_hWindow->m_shaderId);
+	InitTexAndVertex(a_hWindow);
+}
+
+void PrintGLVersions(Window* a_hWindow)
+{
+	// Print out GLFW, OpenGL version and GLEW Version:
+	int iOpenGLMajor = glfwGetWindowAttrib(a_hWindow->m_pWindow, GLFW_CONTEXT_VERSION_MAJOR);
+	int iOpenGLMinor = glfwGetWindowAttrib(a_hWindow->m_pWindow, GLFW_CONTEXT_VERSION_MINOR);
+	int iOpenGLRevision = glfwGetWindowAttrib(a_hWindow->m_pWindow, GLFW_CONTEXT_REVISION);
+	printf("Status: Using GLFW Version %s\n", glfwGetVersionString());
+	printf("Status: Using OpenGL Version: %i.%i, Revision: %i\n", iOpenGLMajor, iOpenGLMinor, iOpenGLRevision);
+	printf("Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
 }
 
 int Init()
@@ -208,44 +199,32 @@ int Init()
 		return EC_GLFW_INIT_FAIL;
 
 	// create our first window:
-	g_hPrimaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - Primary Window", nullptr, nullptr);
-	
-	if (g_hPrimaryWindow == nullptr)
+	if (nullptr == CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - Primary Window", nullptr, nullptr))
 	{
 		glfwTerminate();
 		return EC_GLFW_FIRST_WINDOW_CREATION_FAIL;
 	}
+	PrintGLVersions(g_lWindows.front());
+	// create our second or third or however many windows:
+	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - secondary Window", nullptr, nullptr);
+	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - third Window", nullptr, nullptr);
+	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fourth Window", nullptr, nullptr);
+	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fifth Window", nullptr, nullptr);
+	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - sixth Window", nullptr, nullptr);
 
-	// Print out GLFW, OpenGL version and GLEW Version:
-	int iOpenGLMajor = glfwGetWindowAttrib(g_hPrimaryWindow->m_pWindow, GLFW_CONTEXT_VERSION_MAJOR);
-	int iOpenGLMinor = glfwGetWindowAttrib(g_hPrimaryWindow->m_pWindow, GLFW_CONTEXT_VERSION_MINOR);
-	int iOpenGLRevision = glfwGetWindowAttrib(g_hPrimaryWindow->m_pWindow, GLFW_CONTEXT_REVISION);
-	printf("Status: Using GLFW Version %s\n", glfwGetVersionString());
-	printf("Status: Using OpenGL Version: %i.%i, Revision: %i\n", iOpenGLMajor, iOpenGLMinor, iOpenGLRevision);
-	printf("Status: Using GLEW %s\n", glewGetString(GLEW_VERSION));
-
-	// create our second window:
-	g_hSecondaryWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - secondary Window", nullptr, nullptr);
-	g_hThirdWindow = CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - third Window", nullptr, nullptr);
-
-	InitWindow(g_hPrimaryWindow);
-	InitWindow(g_hSecondaryWindow);
-	InitWindow(g_hThirdWindow);
-
-	MakeContextCurrent(g_hPrimaryWindow);
-	// Now do window specific stuff, including:
-	// --> Creating a VAO with the VBO/IBO created above!
-	// --> Setting Up Projection and View Matricies!
-	// --> Specifing OpenGL Options for the window!
 	const std::array<float[3], 3> colors = { {
 		{ 0.0f, 0.0f, 0.25f },
 		{ 0.25f, 0.0f, 0.25f },
 		{ 0.0f, 0.25f, 0.f },
 	} };
 
-	static bool bFirst = true;
+	// Now do window specific stuff, including:
+	// --> Creating a VAO with the VBO/IBO created above!
+	// --> Setting Up Projection and View Matricies!
+	// --> Specifing OpenGL Options for the window!
 	for (auto window : g_lWindows)
 	{
+		InitWindow(window);
 		MakeContextCurrent(window);
 		
 		// Setup VAO:
@@ -288,74 +267,19 @@ int Init()
 }
 
 
-int MainLoop()
-{
-	std::cout << "Entering main loop on thread ID: " << std::this_thread::get_id() << std::endl;
 
-	while (!ShouldClose())
-	{
-		float fTime = (float)glfwGetTime();   // get time for this iteration
-
-		glm::mat4 identity;
-		g_ModelMatrix = glm::rotate(identity, fTime * 10.0f, glm::vec3(0.0f, 1.0f, 0.0f));
-
-		// simulate work:
-		if (g_bDoWork)
-		{
-			std::chrono::milliseconds dura( 6 );
-			std::this_thread::sleep_for( dura );
-		}
-
-		// draw each window in sequence:
-		for (const auto& window : g_lWindows)
-		{
-			MakeContextCurrent(window);
-		
-			// clear the backbuffer to our clear colour and clear the depth buffer
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-			glUseProgram(window->m_shaderId);
-
-			GLuint ProjectionID = glGetUniformLocation(window->m_shaderId,"Projection");
-			GLuint ViewID = glGetUniformLocation(window->m_shaderId,"View");
-			GLuint ModelID = glGetUniformLocation(window->m_shaderId,"Model");
-
-			glUniformMatrix4fv(ProjectionID, 1, false, glm::value_ptr(window->m_m4Projection));
-			glUniformMatrix4fv(ViewID, 1, false, glm::value_ptr(window->m_m4ViewMatrix));
-			glUniformMatrix4fv(ModelID, 1, false, glm::value_ptr(g_ModelMatrix));
-
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture( GL_TEXTURE_2D, window->m_textureId );
-			glBindVertexArray(g_mVAOs[window->m_uiID]);
-			glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-			glfwSwapBuffers(window->m_pWindow);  // make this loop through all current windows??
-
-			// calc FPS:
-			CalcFPS(window);
-		}
-
-		glfwPollEvents(); // process events!
-	}
-
-	std::cout << "Exiting main loop on thread ID: " << std::this_thread::get_id() << std::endl;
-
-	return EC_NO_ERROR;
-}
 
 
 int MainLoopBAD()
 {
 	std::cout << "Entering main loop on thread ID: " << std::this_thread::get_id() << std::endl;
 
-	WindowHandle win1 = g_hPrimaryWindow;
-	WindowHandle win2 = g_hSecondaryWindow;
-	WindowHandle win3 = g_hThirdWindow;
-
 	glfwMakeContextCurrent(NULL);
-	std::thread renderWindow1(&IndependantRenderLoop, win1);
-	std::thread renderWindow2(&IndependantRenderLoop, win2);
-	std::thread renderWindow3(&IndependantRenderLoop, win3);
+	std::vector<std::thread> renderThreads;
+	for (auto& window : g_lWindows)
+	{
+		renderThreads.push_back(std::thread(&IndependantRenderLoop, window));
+	}
 
 	while (!ShouldClose())
 	{
@@ -366,9 +290,9 @@ int MainLoopBAD()
 		// join second render thread
 		glfwPollEvents(); // process events!
 	}
-	renderWindow1.join();
-	renderWindow2.join();
-	renderWindow3.join();
+	std::for_each(renderThreads.begin(), renderThreads.end(), [](auto& t) {
+		t.join();
+	});
 	std::cout << "Exiting main loop on thread ID: " << std::this_thread::get_id() << std::endl;
 
 	return EC_NO_ERROR;
@@ -376,7 +300,7 @@ int MainLoopBAD()
 
 
 
-void IndependantRenderLoop(WindowHandle a_toWindow)
+void IndependantRenderLoop(Window* a_toWindow)
 {
 	MakeContextCurrent(a_toWindow);
 
@@ -396,7 +320,7 @@ void IndependantRenderLoop(WindowHandle a_toWindow)
 	std::cout << "Exiting main loop on thread ID: " << std::this_thread::get_id() << std::endl;
 }
 
-void Render(WindowHandle a_toWindow)
+void Render(Window* a_toWindow)
 {
 		
 	// clear the backbuffer to our clear colour and clear the depth buffer
@@ -425,13 +349,6 @@ void Render(WindowHandle a_toWindow)
 
 int ShutDown()
 {
-	// join the window2 thread and delete it:
-	if (g_tpWin2 != nullptr)
-	{
-		g_tpWin2->join();
-		delete g_tpWin2;
-	}
-	
 	// delete the FPS data:
 	for (auto itr : m_mFPSData)
 	{
@@ -456,22 +373,17 @@ int ShutDown()
 
 GLEWContext* glewGetContext()
 {
-	//return g_hCurrentContext->m_pGLEWContext;
-	std::thread::id thread = std::this_thread::get_id();
-	return g_mCurrentContextMap[thread]->m_pGLEWContext;
+	return g_currentThreadContext->m_pGLEWContext;
 }
 
-void MakeContextCurrent(WindowHandle a_hWindowHandle)
+void MakeContextCurrent(Window* a_hWindow)
 {
-	if (a_hWindowHandle != nullptr)
+	if (a_hWindow != nullptr)
 	{
-		std::thread::id thread = std::this_thread::get_id();
-
-		glfwMakeContextCurrent(a_hWindowHandle->m_pWindow);
-		// not cool, not cool... !#@%!@$
-		g_mCurrentContextMap[thread] = a_hWindowHandle;
-
-		if (a_hWindowHandle->m_pWindow != glfwGetCurrentContext())
+		glfwMakeContextCurrent(a_hWindow->m_pWindow);
+		g_currentThreadContext = a_hWindow;
+		
+		if (a_hWindow->m_pWindow != glfwGetCurrentContext())
 		{
 			printf("context not as expected\n");
 		}
@@ -483,14 +395,10 @@ void MakeContextCurrent(WindowHandle a_hWindowHandle)
 }
 
 
-WindowHandle CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, GLFWmonitor* a_pMonitor, WindowHandle a_hShare)
+Window* CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, GLFWmonitor* a_pMonitor, Window* a_hShare)
 {
-	// save current active context info so we can restore it later!
-	std::thread::id thread = std::this_thread::get_id();
-	WindowHandle hPreviousContext = g_mCurrentContextMap[thread];
-
 	// create new window data:
-	WindowHandle newWindow = new Window();
+	Window* newWindow = new Window();
 	if (newWindow == nullptr)
 		return nullptr;
 
@@ -566,16 +474,13 @@ WindowHandle CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTi
 	// add new window to the map and increment handle counter:
 	g_lWindows.push_back(newWindow);
 
-	// now restore previous context:
-	MakeContextCurrent(hPreviousContext);
-
 	return newWindow;
 }
 
 
-void CalcFPS(WindowHandle a_hWindowHandle)
+void CalcFPS(Window* a_hWindow)
 {
-	FPSData* data = m_mFPSData[a_hWindowHandle->m_uiID];
+	FPSData* data = m_mFPSData[a_hWindow->m_uiID];
 	if (data != nullptr)
 	{
 		data->m_fFrameCount++;
@@ -587,7 +492,7 @@ void CalcFPS(WindowHandle a_hWindowHandle)
 			data->m_fFPS = data->m_fFrameCount / data->m_fTimeElapsed;
 			data->m_fTimeElapsed = 0.0f;
 			data->m_fFrameCount = 0;
-			std::cout << "Thread id: " << std::this_thread::get_id() << "  Window: " <<  a_hWindowHandle->m_uiID << " FPS = " << (int)data->m_fFPS << std::endl;
+			std::cout << "Thread id: " << std::this_thread::get_id() << "  Window: " <<  a_hWindow->m_uiID << " FPS = " << (int)data->m_fFPS << std::endl;
 		}
 	}
 }
@@ -691,7 +596,8 @@ void APIENTRY GLErrorCallback(GLenum /* source */, GLenum type, GLuint id, GLenu
 void GLFWWindowSizeCallback(GLFWwindow* a_pWindow, int a_iWidth, int a_iHeight)
 {
 	// find the window data corrosponding to a_pWindow;
-	WindowHandle window = nullptr;
+	return;
+	Window* window = nullptr;
 	for (auto& itr : g_lWindows)
 	{
 		if (itr->m_pWindow == a_pWindow)
@@ -703,9 +609,6 @@ void GLFWWindowSizeCallback(GLFWwindow* a_pWindow, int a_iWidth, int a_iHeight)
 		}
 	}
 
-	std::thread::id thread = std::this_thread::get_id();
-	WindowHandle previousContext = g_mCurrentContextMap[thread];
 	MakeContextCurrent(window);
 	glViewport(0, 0, a_iWidth, a_iHeight);
-	MakeContextCurrent(previousContext);
 }
