@@ -1,6 +1,5 @@
 // Note that the following includes must be defined in order:
-#include "GL\glew.h"
-#include "GLFW\glfw3.h"
+#include "stdafx.h"
 #include "ThreadingDemo.h"
 
 // Note the the following Includes do not need to be defined in order:
@@ -14,6 +13,36 @@
 #include "glm\glm.hpp"
 #include "glm\ext.hpp"
 #include <iostream>
+
+#include "ComputeShaders.h"
+
+
+class Window
+{
+public:
+	~Window() {
+		assert(!m_pWindow);
+		assert(!m_pGLEWContext);
+
+		if (m_Computes)	{
+			delete m_Computes;
+		}
+	}
+
+	GLFWwindow*		m_pWindow;
+	GLEWContext*	m_pGLEWContext;
+	unsigned int	m_uiWidth;
+	unsigned int	m_uiHeight;
+	glm::mat4		m_m4Projection;
+	glm::mat4		m_m4ViewMatrix;
+
+	unsigned int	m_uiID;
+
+	unsigned int	m_shaderId;
+	unsigned int	m_textureId;
+
+	ComputeShaders* m_Computes;
+};
 
 // info: http://www.baptiste-wicht.com/2012/04/c11-concurrency-tutorial-advanced-locking-and-condition-variables/
 //////////////////////// global Vars //////////////////////////////
@@ -42,7 +71,6 @@ int ShutDown();
 void GLFWErrorCallback(int a_iError, const char* a_szDiscription);
 void GLFWWindowSizeCallback(GLFWwindow* a_pWindow, int a_iWidth, int a_iHeight);
 void APIENTRY GLErrorCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
-GLEWContext* glewGetContext();   // This needs to be defined for GLEW MX to work, along with the GLEW_MX define in the perprocessor!
 void CalcFPS(Window* a_hWindow);
 
 Window*  CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, GLFWmonitor* a_pMonitor, Window* a_hShare);
@@ -123,6 +151,7 @@ void InitShader(Window* a_hWindow)
 		printf("\n");
 	}
 
+	a_hWindow->m_Computes = ComputeShaders::Create();
 }
 
 void InitTexAndVertex(Window* a_hWindow)
@@ -207,12 +236,12 @@ int Init()
 	PrintGLVersions(g_lWindows.front());
 	// create our second or third or however many windows:
 	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - secondary Window", nullptr, nullptr);
-	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - third Window", nullptr, nullptr);
-	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fourth Window", nullptr, nullptr);
-	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fifth Window", nullptr, nullptr);
-	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - sixth Window", nullptr, nullptr);
-	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - seventh Window", nullptr, nullptr);
-	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - eighth Window", nullptr, nullptr);
+	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - third Window", nullptr, nullptr);
+	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fourth Window", nullptr, nullptr);
+	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fifth Window", nullptr, nullptr);
+	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - sixth Window", nullptr, nullptr);
+	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - seventh Window", nullptr, nullptr);
+	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - eighth Window", nullptr, nullptr);
 
 	const std::array<float[3], 3> colors = { {
 		{ 0.0f, 0.0f, 0.25f },
@@ -331,6 +360,30 @@ void Render(Window* a_toWindow)
 	// clear the backbuffer to our clear colour and clear the depth buffer
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+
+	const bool test_compute = true;
+	ComputeExtractFeature::debugBuffer buffer;
+	if (test_compute)
+	{
+		auto& cs = a_toWindow->m_Computes->compute_extract;
+
+		std::vector< float > Dummy1 = { 2, 0 , 0 , 0, 2, 0, 0, 0, 2 };
+		std::vector< float > Dummy2 = { 0, 0 , 1 , 0, 1, 0, 1, 0, 0 };
+		std::vector< float > Dummy3 = { -1, 0 , 0 , 0, -1, 0, 0, 0, -1 };
+
+		cs.SetUniformData3x3("K", Dummy1);
+		cs.SetUniformData3x3("D", Dummy2);
+
+		std::vector< float > inputData(1000 * 1000);
+		for (int i = 0; i < inputData.size(); i++) {
+			inputData[i] = i;
+		}
+
+		cs.UploadData(0, inputData);
+		cs.Dispatch();
+		cs.Dump(buffer);
+	}
+
 	glUseProgram(a_toWindow->m_shaderId);
 
 	GLuint ProjectionID = glGetUniformLocation(a_toWindow->m_shaderId,"Projection");
@@ -345,6 +398,8 @@ void Render(Window* a_toWindow)
 	glBindTexture( GL_TEXTURE_2D, a_toWindow->m_textureId);
 	glBindVertexArray(g_mVAOs[a_toWindow->m_uiID]);
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+	
 
 	glfwSwapBuffers(a_toWindow->m_pWindow);  // make this loop through all current windows??
 
@@ -476,12 +531,10 @@ Window* CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, 
 	glfwSetWindowSizeCallback(newWindow->m_pWindow, GLFWWindowSizeCallback);
 
 	 // setup openGL Error callback:
-	const bool use_glErrCallback = false;
+	const bool use_glErrCallback = true;
     if (use_glErrCallback&&GLEW_ARB_debug_output) // test to make sure we can use the new callbacks, they wer added as an extgension in 4.1 and as a core feture in 4.3
     {
-            #ifdef _DEBUG
-            glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);                        // this allows us to set a break point in the callback function, no point to it if in release mode.
-            #endif
+			glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);                        // this allows us to set a break point in the callback function, no point to it if in release mode.
 			glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);        // tell openGl what errors we want (all).
             glDebugMessageCallback(GLErrorCallback, NULL);                        // define the callback function.
     }

@@ -23,22 +23,6 @@ enum ExitCodes
 	EC_GLFW_FIRST_WINDOW_CREATION_FAIL = 2,
 };
 
-struct Window
-{
-	GLFWwindow*		m_pWindow;
-	GLEWContext*	m_pGLEWContext;
-	unsigned int	m_uiWidth;
-	unsigned int	m_uiHeight;
-	glm::mat4		m_m4Projection;
-	glm::mat4		m_m4ViewMatrix;
-
-	unsigned int	m_uiID;
-
-	unsigned int	m_shaderId;
-	unsigned int	m_textureId;
-};
-typedef Window* WindowHandle;
-
 struct FPSData
 {
 	float			m_fFPS;
