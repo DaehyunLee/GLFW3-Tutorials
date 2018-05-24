@@ -208,9 +208,11 @@ int Init()
 	// create our second or third or however many windows:
 	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - secondary Window", nullptr, nullptr);
 	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - third Window", nullptr, nullptr);
-	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fourth Window", nullptr, nullptr);
-	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fifth Window", nullptr, nullptr);
-	//CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - sixth Window", nullptr, nullptr);
+	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fourth Window", nullptr, nullptr);
+	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - fifth Window", nullptr, nullptr);
+	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - sixth Window", nullptr, nullptr);
+	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - seventh Window", nullptr, nullptr);
+	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - eighth Window", nullptr, nullptr);
 
 	const std::array<float[3], 3> colors = { {
 		{ 0.0f, 0.0f, 0.25f },
@@ -303,6 +305,9 @@ int MainLoopBAD()
 void IndependantRenderLoop(Window* a_toWindow)
 {
 	MakeContextCurrent(a_toWindow);
+	//this seems to be turning of the vsync, but it's a bit hard to tell. my cpu is hitting 100% before gpu goes beyond 60%
+	// in the future, if this doesn't seem like its doing the job done, try turning it off on Nvidia control panel.
+	glfwSwapInterval(0);
 
 	while (!ShouldClose())
 	{
@@ -424,7 +429,7 @@ Window* CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, 
 	{
 		newWindow->m_pWindow = glfwCreateWindow(a_iWidth, a_iHeight, a_szTitle.c_str(), a_pMonitor, nullptr); // Window handle is invlad, do not share!
 	}
-	
+
 	// Confirm window was created successfully:
 	if (newWindow->m_pWindow == nullptr)
 	{
@@ -454,6 +459,16 @@ Window* CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, 
 		glfwDestroyWindow(newWindow->m_pWindow);
 		delete newWindow;
 		return nullptr;
+	}
+
+	if (glfwExtensionSupported("WGL_EXT_swap_control_tear"))
+	{
+		std::cout << "WGL_EXT_swap_control_tear\n";
+	}
+
+	if (glfwExtensionSupported("GLX_EXT_swap_control_tear"))
+	{
+		std::cout << "GLX_EXT_swap_control_tear\n";
 	}
 	
 	// setup callbacks:
