@@ -26,7 +26,9 @@ enum ExitCodes
 struct Window
 {
 	GLFWwindow*		m_pWindow;
+#ifdef GLEW_MX
 	GLEWContext*	m_pGLEWContext;
+#endif
 	unsigned int	m_uiWidth;
 	unsigned int	m_uiHeight;
 	glm::mat4		m_m4Projection;

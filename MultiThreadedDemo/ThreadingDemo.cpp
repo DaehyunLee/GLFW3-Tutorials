@@ -42,7 +42,9 @@ int ShutDown();
 void GLFWErrorCallback(int a_iError, const char* a_szDiscription);
 void GLFWWindowSizeCallback(GLFWwindow* a_pWindow, int a_iWidth, int a_iHeight);
 void APIENTRY GLErrorCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, void* userParam);
+#ifdef GLEW_MX
 GLEWContext* glewGetContext();   // This needs to be defined for GLEW MX to work, along with the GLEW_MX define in the perprocessor!
+#endif
 void CalcFPS(Window* a_hWindow);
 
 Window*  CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, GLFWmonitor* a_pMonitor, Window* a_hShare);
@@ -363,7 +365,9 @@ int ShutDown()
 	// cleanup any remaining windows:
 	for (auto& window :g_lWindows)
 	{
+#ifdef GLEW_MX
 		delete window->m_pGLEWContext;
+#endif
 		glfwDestroyWindow(window->m_pWindow);
 
 		delete window;
@@ -376,10 +380,12 @@ int ShutDown()
 }
 
 
+#ifdef GLEW_MX
 GLEWContext* glewGetContext()
 {
 	return g_currentThreadContext->m_pGLEWContext;
 }
+#endif
 
 void MakeContextCurrent(Window* a_hWindow)
 {
@@ -407,7 +413,9 @@ Window* CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, 
 	if (newWindow == nullptr)
 		return nullptr;
 
+#ifdef GLEW_MX
 	newWindow->m_pGLEWContext = nullptr;
+#endif
 	newWindow->m_pWindow = nullptr;
 	newWindow->m_uiID = g_uiWindowCounter++;		// set ID and Increment Counter!
 	newWindow->m_uiWidth = a_iWidth;
@@ -439,6 +447,7 @@ Window* CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, 
 	}
 
 	// create GLEW Context:
+#ifdef GLEW_MX
 	newWindow->m_pGLEWContext = new GLEWContext();
 	if (newWindow->m_pGLEWContext == nullptr)
 	{
@@ -446,7 +455,7 @@ Window* CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, 
 		delete newWindow;
 		return nullptr;
 	}
-
+#endif
 	glfwMakeContextCurrent(newWindow->m_pWindow);   // Must be done before init of GLEW for this new windows Context!
 	MakeContextCurrent(newWindow);					// and must be made current too :)
 	
@@ -483,7 +492,7 @@ Window* CreateWindow(int a_iWidth, int a_iHeight, const std::string& a_szTitle, 
             glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);                        // this allows us to set a break point in the callback function, no point to it if in release mode.
             #endif
 			glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);        // tell openGl what errors we want (all).
-            glDebugMessageCallback(GLErrorCallback, NULL);                        // define the callback function.
+//            glDebugMessageCallback(GLErrorCallback, NULL);                        // define the callback function.
     }
 
 	// add new window to the map and increment handle counter:
