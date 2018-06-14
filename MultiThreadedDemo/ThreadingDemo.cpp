@@ -9,7 +9,7 @@
 #include <list>
 #include <array>
 #include <thread>
-#include <future>
+#include <vector>
 #include <atomic>
 #include "glm\glm.hpp"
 #include "glm\ext.hpp"
@@ -25,7 +25,6 @@ std::map<unsigned int, unsigned int>	g_mVAOs;
 unsigned int g_VBO = 0;
 unsigned int g_IBO = 0;
 glm::mat4	g_ModelMatrix;
-std::mutex g_RenderLock;
 thread_local Window* g_currentThreadContext;
 
 std::map<unsigned int, FPSData*> m_mFPSData;

@@ -6,10 +6,11 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalIncludeDirectories>$(ProjectDir)../Lib/glfw3/Include;$(ProjectDir)../Lib/glm/;$(ProjectDir)../Lib/glew-2.1.0/Include;</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_UNICODE;UNICODE;GLEW_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>$(ProjectDir)../Lib/glfw3/Lib;$(ProjectDir)../Lib/glew-2.1.0/lib/Release/$(PlatformName);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>legacy_stdio_definitions.lib;glfw3.lib;opengl32.lib;glu32.lib;glew32s.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)../Lib/glfw3/Lib;$(ProjectDir)../Lib/glew-2.1.0/lib/$(Configuration)/$(PlatformName);</AdditionalLibraryDirectories>
+      <AdditionalDependencies>legacy_stdio_definitions.lib;;glfw3.lib;opengl32.lib;glu32.lib;glew32s.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup />
