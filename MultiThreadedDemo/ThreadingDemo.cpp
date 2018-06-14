@@ -216,7 +216,7 @@ int Init()
 	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - seventh Window", nullptr, nullptr);
 	CreateWindow(c_iDefaultScreenWidth, c_iDefaultScreenHeight, "Threading Demo - eighth Window", nullptr, nullptr);
 
-	const std::array<float[3], 3> colors = { {
+	const std::array< std::array<float, 3>, 3> colors = { {
 		{ 0.0f, 0.0f, 0.25f },
 		{ 0.25f, 0.0f, 0.25f },
 		{ 0.0f, 0.25f, 0.f },
