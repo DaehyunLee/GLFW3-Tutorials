@@ -3,11 +3,7 @@
 
 #include "stdafx.h"
 
-
-#include "GL\glew.h"
-#include "GLFW\glfw3.h"
-#include "glm\glm.hpp"
-#include "glm\ext.hpp"
+#include "GLWin.h"
 
 /////////////////////////// Shaders ///////////////////////////////////
 const char *c_szVertexShader = "#version 330\n"
@@ -37,6 +33,8 @@ const char *c_szPixelShader = "#version 330\n"
 "outColour = texture2D(diffuseTexture, vUV) + vColour;\n"
 "}\n"
 "\n";
+
+
 struct Vertex
 {
 	glm::vec4 m_v4Position;
@@ -81,34 +79,18 @@ Quad CreateQuad()
 }
 
 
-unsigned int	m_uiWidth = 1024;
-unsigned int	m_uiHeight = 1024;
-
 unsigned int	m_shaderId;
 unsigned int	m_textureId;
-unsigned int g_VBO = 0;
-unsigned int g_IBO = 0;
-unsigned int g_VAO = 0;
+unsigned int	g_VBO = 0;
+unsigned int	g_IBO = 0;
+unsigned int	g_VAO = 0;
 
-glm::mat4		m_m4Projection;
-glm::mat4		m_m4ViewMatrix;
 glm::mat4	g_ModelMatrix;
 
 int main()
 {
+	IGLWin* test = IGLWin::Create();
 
-	// Init GLFW:
-	if (!glfwInit())
-		return -1;
-
-	GLFWwindow*	pWindow = glfwCreateWindow(m_uiWidth, m_uiHeight, "testing compute", nullptr, nullptr);
-	glfwMakeContextCurrent(pWindow);
-
-	GLenum err = glewInit();
-	if (err != GLEW_OK)
-	{
-		throw std::exception("glew bailed.");
-	}
 
 	// create shader:
 	GLint iSuccess = 0;
@@ -217,12 +199,10 @@ int main()
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), ((char*)0) + 16);
 	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), ((char*)0) + 24);
 
-	// Setup Matrix:
-	m_m4Projection = glm::perspective(45.0f, float(m_uiWidth) / float(m_uiHeight), 0.1f, 1000.0f);
-	m_m4ViewMatrix = glm::lookAt(glm::vec3(8, 8, 8), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 
 	// set OpenGL Options:
-	glViewport(0, 0, m_uiWidth, m_uiHeight);
+	glm::ivec2 dim = test->getDimension();
+	glViewport(0, 0, dim[0], dim[1]);
 	glClearColor(0, 0, 0.25f, 1);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
@@ -245,8 +225,8 @@ int main()
 		GLuint ViewID = glGetUniformLocation(m_shaderId, "View");
 		GLuint ModelID = glGetUniformLocation(m_shaderId, "Model");
 
-		glUniformMatrix4fv(ProjectionID, 1, false, glm::value_ptr(m_m4Projection));
-		glUniformMatrix4fv(ViewID, 1, false, glm::value_ptr(m_m4ViewMatrix));
+		glUniformMatrix4fv(ProjectionID, 1, false, glm::value_ptr(test->getProjection()));
+		glUniformMatrix4fv(ViewID, 1, false, glm::value_ptr(test->getProjection()));
 		glUniformMatrix4fv(ModelID, 1, false, glm::value_ptr(g_ModelMatrix));
 
 		glActiveTexture(GL_TEXTURE0);
@@ -254,7 +234,7 @@ int main()
 		glBindVertexArray(g_VAO);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-		glfwSwapBuffers(pWindow);  // make this loop through all current windows??
+		test->SwapBuffers();
 
 		// join second render thread
 		glfwPollEvents(); // process events!
