@@ -9,6 +9,10 @@
 
 #include <stdio.h>
 #include <tchar.h>
+#include <vector>
+#include <array>
+#include <fstream>
+#include <map>
 #include <exception>
 
 #include "GL\glew.h"

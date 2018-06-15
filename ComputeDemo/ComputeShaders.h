@@ -3,7 +3,6 @@
 
 
 typedef CS_Class<1, 1> ComputeExtractFeature;
-typedef CS_Class<2, 3> ComputeTriangulate;
 
 class ComputeShaders
 {
@@ -19,14 +18,11 @@ public:
 
 	static ComputeShaders* Create();
 private:
-	unsigned int pageId;
-
 	int work_grp_cnt[3];
 	int work_grp_size[3];
 	int work_grp_inv;
 
 	bool InitComputeShader();
 	void DestroyComputeShader();
-	std::map<std::string, GLuint> ConstBuffers;
 };
 

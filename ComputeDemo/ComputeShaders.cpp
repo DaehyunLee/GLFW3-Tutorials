@@ -27,10 +27,7 @@ GLuint CreateTexforCompute()
 	return tex_output;
 }
 
-
-
 ComputeShaders::ComputeShaders()
-	:pageId(0)
 {
 }
 

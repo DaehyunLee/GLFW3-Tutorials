@@ -109,30 +109,25 @@ namespace ComputeHelper {
 
 		progId = compute_program;
 
-		int numUniforms = 0;
-		glGetProgramiv(progId, GL_ACTIVE_UNIFORMS, &numUniforms);
-		if (numUniforms > 0)
-		{
-			std::vector<UniformInfo> data;
-			LoadUniformInfo(data, progId);
-
-			for (auto& info : data) {
-				//need better format.
-				std::cout << info.location << " : " << info.size << std::endl;
-			}
-		}
-
-		//glGetActiveUniform(progId)
+		std::vector<UniformInfo> data;
+		LoadUniformInfo(data, progId);
 		PrintProgramInfo(std::cout, progId);
 		return true;
 	}
 
 	void LoadUniformInfo(std::vector<UniformInfo>& data, GLuint progId)
 	{
-		//https://www.khronos.org/opengl/wiki/GLAPI/glGetProgram
-		//https://www.khronos.org/opengl/wiki/GLAPI/glGetActiveUniform
-
-		//TODO Jack.
+		int numUniforms = 0;
+		glGetProgramiv(progId, GL_ACTIVE_UNIFORMS, &numUniforms);
+		if (numUniforms > 0)
+		{
+			data.resize(numUniforms);
+			for (int i = 0; i < numUniforms; i++)
+			{
+				GLsizei lenRet = 0;
+				glGetActiveUniform(progId, i, data[i].name.size(), &(data[i].size), &lenRet, &(data[i].type), data[i].name.data());
+			}
+		}
 	}
 
 }

@@ -1,8 +1,9 @@
 #pragma once
 
 struct UniformInfo {
-	int location;
+	std::array<char, 512> name;
 	int size;
+	GLenum type;
 };
 
 class ComputeInit
@@ -31,7 +32,6 @@ class CS_Class
 {
 public:
 	CS_Class()
-		: Dispatched(false)
 	{};
 	//init params
 	typedef std::array<ComputeInit, numInput> InitParamList_In;
@@ -70,39 +70,12 @@ public:
 	template <class bufferType>
 	bool SetUniformData3x3(const char* name, std::vector<bufferType>& buffer);
 
+	//we should separate the buffer and the CS shader. 
 	void UploadData(int index, std::vector<float>& data);
 
 	void Dump(debugBuffer& buffer);
 	void Dump(std::vector<float>& buffer, int index);
 	void Dump(int& atomicCount);
-
-	void queryBegin(){
-		glQueryCounter(queryId[0], GL_TIMESTAMP);
-	}
-	void queryEnd() {
-		glQueryCounter(queryId[1], GL_TIMESTAMP);
-	}
-	void WaitAndPrint() {
-		int stopTimerAvailable = 0;
-		while (!stopTimerAvailable) {
-			glGetQueryObjectiv(queryId[1], GL_QUERY_RESULT_AVAILABLE, &stopTimerAvailable);
-			if (GL_NO_ERROR != glGetError())
-			{
-				printf("no query available.\n");
-				return;
-			}
-		}
-
-		// get query results
-		GLuint64 startTime;
-		GLuint64 stopTime;
-		glGetQueryObjectui64v(queryId[0], GL_QUERY_RESULT, &startTime);
-		glGetQueryObjectui64v(queryId[1], GL_QUERY_RESULT, &stopTime);
-		printf("Time spent on the GPU: %f ms\n", (stopTime - startTime) / 1000000.0);
-	}
-
-	bool Dispatched;
-	GLuint queryId[2];
 };
 
 
@@ -167,7 +140,6 @@ bool CS_Class<numInput, numOutputBuffer>::Init()
 		}
 	}
 
-	glGenQueries(2, queryId);
 	return ComputeHelper::CompileShader(sourceName.c_str(), programId);
 }
 
@@ -226,7 +198,6 @@ void CS_Class<numInput, numOutputBuffer>::Dispatch(GLuint dimX, GLuint dimY, GLu
 
 	// make sure writing to image has finished before read
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-	Dispatched = true;
 }
 
 template <int numInput, int numOutputBuffer>
@@ -255,7 +226,7 @@ bool CS_Class<numInput, numOutputBuffer>::SetUniformData3x3(const char* name, st
 	GLuint loc = glGetUniformLocation(programId, name);
 	assert(loc != 0);
 	assert(loc != -1);
-	assert(buffer.size == 9);
+	assert(buffer.size() == 9);
 
 	glUseProgram(programId);
 	glUniformMatrix3fv(loc, 1, true, buffer.data());

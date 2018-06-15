@@ -25,5 +25,6 @@ void main () {
 	//outData[index] = inputData[index];
 	outData[index].x = inputData[index];
 	outData[index].y = inputData[4];
+	outData[index].z = ret.x;
 	outData[index].w = index;
 }
