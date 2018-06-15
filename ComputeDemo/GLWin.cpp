@@ -64,5 +64,5 @@ void GLFWWin::MakeCurrent()
 
 void GLFWWin::SwapBuffers()
 {
-
+	glfwSwapBuffers(myWindow); 
 }
