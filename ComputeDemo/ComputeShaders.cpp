@@ -48,6 +48,7 @@ ComputeShaders* ComputeShaders::Create()
 	{
 		std::exception("failed to init compute shader...");
 	}
+	return nullptr;
 }
 
 /*intensionally not using typedefed type to pick up changes*/

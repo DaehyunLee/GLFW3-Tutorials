@@ -6,6 +6,17 @@ struct UniformInfo {
 	GLenum type;
 };
 
+struct BufferInfo {
+	std::string name;
+	GLenum type;
+	int stride;
+};
+
+struct InputInfo {
+	GLenum type;
+	int stride;
+};
+
 class ComputeInit
 {
 public:
@@ -33,12 +44,16 @@ class CS_Class
 public:
 	CS_Class()
 	{};
+
 	//init params
 	typedef std::array<ComputeInit, numInput> InitParamList_In;
 	typedef std::array<ComputeInit, numOutputBuffer> InitParamList_Out;
 	//initialized values
 	typedef std::array<GLuint, numInput> InputIDList;
 	typedef std::array<GLuint, numOutputBuffer> BufferIDList;
+
+	std::vector<UniformInfo> myUniformInfo;
+	std::vector<BufferInfo> myBufferInfo;
 
 	typedef std::array<std::vector<float>, numOutputBuffer> debugBuffer;
 
@@ -90,12 +105,34 @@ namespace ComputeHelper
 	void PrintProgramInfo(std::ostream& out, GLuint progId);
 	void PrintShaderInfo(std::ostream& out, GLuint shaderId);
 
+	bool GenerateBuffers(std::vector<BufferInfo>& bufInfo, std::vector<GLuint>& idList);
+
 	void LoadUniformInfo(std::vector<UniformInfo>& data, GLuint progId);
+	void LoadBufferInfo(std::vector<BufferInfo>& data, GLuint progId);
+	void LoadInputInfo(std::vector<InputInfo>& data, GLuint progId);
 }
 
 template <int numInput, int numOutputBuffer>
 bool CS_Class<numInput, numOutputBuffer>::Init()
 {
+	bool ret = ComputeHelper::CompileShader(sourceName.c_str(), programId);
+
+	if (ret)
+	{
+		ComputeHelper::LoadUniformInfo(myUniformInfo, programId);
+		ComputeHelper::LoadBufferInfo(myBufferInfo, programId);
+	}
+
+#define TRYING_TO_REMOVE_TEMPLATE 1
+#if TRYING_TO_REMOVE_TEMPLATE
+	std::vector<GLuint> generatedIds;
+	ComputeHelper::GenerateBuffers(myBufferInfo, generatedIds);
+	assert(generatedIds.size() == inputs.size() + ids.size());
+	inputs[0] = generatedIds[0];
+	ids[0] = generatedIds[1];
+	//copy.
+#else
+//this buffer generation should be removed aside from template
 	//Generate inputs
 	for (int i = 0; i < numInput; i++)
 	{
@@ -119,7 +156,6 @@ bool CS_Class<numInput, numOutputBuffer>::Init()
 		}
 	}
 
-
 	//Generate Outputs
 	glGenBuffers(numOutputBuffer, ids.data());
 	for (int i = 0; i < numOutputBuffer; i++)
@@ -139,8 +175,8 @@ bool CS_Class<numInput, numOutputBuffer>::Init()
 			glBindBuffer(GL_ARRAY_BUFFER, 0);
 		}
 	}
-
-	return ComputeHelper::CompileShader(sourceName.c_str(), programId);
+#endif //TRYING_TO_REMOVE_TEMPLATE
+	return ret;
 }
 
 template <int numInput, int numOutputBuffer>
@@ -224,7 +260,6 @@ bool CS_Class<numInput, numOutputBuffer>::SetUniformData3x3(const char* name, st
 {
 	//should remove bufferType template
 	GLuint loc = glGetUniformLocation(programId, name);
-	assert(loc != 0);
 	assert(loc != -1);
 	assert(buffer.size() == 9);
 

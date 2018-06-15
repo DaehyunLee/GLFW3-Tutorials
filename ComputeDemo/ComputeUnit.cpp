@@ -109,9 +109,72 @@ namespace ComputeHelper {
 
 		progId = compute_program;
 
-		std::vector<UniformInfo> data;
-		LoadUniformInfo(data, progId);
+		std::vector<InputInfo> dataInput;
+		LoadInputInfo(dataInput, progId);
+
+		{
+			//just dumping stuff..
+			std::vector<int> test = { 
+				GL_UNIFORM, 
+				GL_UNIFORM_BLOCK,
+				GL_ATOMIC_COUNTER_BUFFER,
+				GL_PROGRAM_INPUT,
+				GL_PROGRAM_OUTPUT, 
+				GL_TRANSFORM_FEEDBACK_VARYING,
+				GL_BUFFER_VARIABLE,
+				GL_SHADER_STORAGE_BLOCK,
+				GL_TRANSFORM_FEEDBACK_BUFFER,
+			};
+
+			for (int i = 0; i < test.size(); i++) {
+				int numSomething = 0;
+				glGetProgramInterfaceiv(progId, test[i], GL_ACTIVE_RESOURCES, &numSomething);
+				printf("[%d] => %d\n", i, numSomething);
+			}
+			printf("dump complete\n");
+		}
+
 		PrintProgramInfo(std::cout, progId);
+		return true;
+	}
+
+	bool GenerateBuffers(std::vector<BufferInfo>& bufInfo, std::vector<GLuint>& idList)
+	{
+		assert(0);
+		const static int temporarySizeInformation_PLZFIX = 10000;
+		idList.resize(bufInfo.size());
+		for (int i = 0; i < bufInfo.size(); i++)
+		{
+			glGenBuffers(bufInfo.size(), &idList[i]);
+
+			switch (bufInfo[i].type)
+			{
+			case GL_FLOAT_VEC4:
+			{
+				glBindBuffer(GL_ARRAY_BUFFER, idList[i]);
+				glBufferData(GL_ARRAY_BUFFER, temporarySizeInformation_PLZFIX * 4 * sizeof(GLuint), 0, GL_DYNAMIC_DRAW);
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
+			}break;
+			case GL_INT_VEC4:
+			{
+			}break;
+			case GL_FLOAT: //ComputeInit::TYPE_FLOAT
+			{
+				glBindBuffer(GL_ARRAY_BUFFER, idList[i]);
+				glBufferData(GL_ARRAY_BUFFER, temporarySizeInformation_PLZFIX * sizeof(GLuint), 0, GL_DYNAMIC_DRAW);
+				glBindBuffer(GL_ARRAY_BUFFER, 0);
+			}break;
+			case GL_ATOMIC_COUNTER_BUFFER:
+			{
+				glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, idList[i]);
+				glBufferData(GL_ATOMIC_COUNTER_BUFFER, sizeof(GLuint), NULL, GL_DYNAMIC_DRAW);
+				glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, 0);
+			} break;
+			default:
+				break;
+			}
+		}
+
 		return true;
 	}
 
@@ -130,4 +193,78 @@ namespace ComputeHelper {
 		}
 	}
 
+	void LoadBufferInfo(std::vector<BufferInfo>& data, GLuint progId)
+	{
+		int numBuffers = 0;
+		glGetProgramInterfaceiv(progId, GL_BUFFER_VARIABLE, GL_ACTIVE_RESOURCES, &numBuffers);
+		if (numBuffers > 0)
+		{
+			data.resize(numBuffers);
+			for (int i = 0; i < numBuffers; i++)
+			{
+				GLsizei lenRet = 0;
+				std::vector<GLenum> props = {
+					GL_NAME_LENGTH, 
+					GL_TYPE,
+					GL_ARRAY_SIZE,
+					GL_OFFSET,
+					GL_BLOCK_INDEX,
+					GL_ARRAY_STRIDE,
+					GL_MATRIX_STRIDE,
+					GL_IS_ROW_MAJOR,
+					GL_REFERENCED_BY_VERTEX_SHADER,
+					GL_REFERENCED_BY_TESS_CONTROL_SHADER,
+					GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
+					GL_REFERENCED_BY_GEOMETRY_SHADER,
+					GL_REFERENCED_BY_FRAGMENT_SHADER,
+					GL_REFERENCED_BY_COMPUTE_SHADER,
+					GL_TOP_LEVEL_ARRAY_SIZE,
+					GL_TOP_LEVEL_ARRAY_STRIDE,
+				};
+
+				std::vector<GLint> ret(props.size());
+
+				int len = 0;
+				glGetProgramResourceiv(progId, GL_BUFFER_VARIABLE, i, props.size(), props.data(), sizeof(GLint)*ret.size(), &len, ret.data());
+				data[i].name.resize(ret[0]);
+				data[i].type = ret[1];
+				data[i].stride = ret[5];
+
+				glGetProgramResourceName(progId, GL_BUFFER_VARIABLE, i, ret[0], &len, &(data[i].name[0]));
+
+			}
+		}
+	}
+
+	void LoadInputInfo(std::vector<InputInfo>& data, GLuint progId)
+	{
+		int num = 0;
+		glGetProgramInterfaceiv(progId, GL_PROGRAM_INPUT, GL_ACTIVE_RESOURCES, &num);
+		if (num > 0)
+		{
+			data.resize(num);
+			for (int i = 0; i < num; i++)
+			{
+				GLsizei lenRet = 0;
+				std::vector<GLenum> props = {
+					GL_TYPE,
+					GL_ARRAY_SIZE,
+					GL_REFERENCED_BY_VERTEX_SHADER,
+					GL_REFERENCED_BY_TESS_CONTROL_SHADER,
+					GL_REFERENCED_BY_TESS_EVALUATION_SHADER,
+					GL_REFERENCED_BY_GEOMETRY_SHADER,
+					GL_REFERENCED_BY_FRAGMENT_SHADER,
+					GL_REFERENCED_BY_COMPUTE_SHADER,
+					GL_LOCATION,
+					GL_IS_PER_PATCH,
+					GL_LOCATION_COMPONENT,
+				};
+
+				std::vector<GLint> ret(props.size());
+
+				int len = 0;
+				glGetProgramResourceiv(progId, GL_PROGRAM_INPUT, i, props.size(), props.data(), sizeof(GLint)*ret.size(), &len, ret.data());
+			}
+		}
+	}
 }
