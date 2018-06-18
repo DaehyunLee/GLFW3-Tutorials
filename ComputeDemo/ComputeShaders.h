@@ -2,8 +2,6 @@
 #include "ComputeUnit.h"
 
 
-typedef CS_Class<1, 1> ComputeExtractFeature;
-
 class ComputeShaders
 {
 private:
@@ -11,7 +9,7 @@ private:
 
 public:
 	//------------ single compute shader//
-	ComputeExtractFeature compute_extract;
+	CS_Class compute_extract;
 
 	//------------ end
 	virtual ~ComputeShaders();

@@ -45,7 +45,6 @@ public:
 	bool createBuffer;
 };
 
-template <int numInput, int numOutputBuffer>
 class CS_Class
 {
 public:
@@ -105,82 +104,10 @@ namespace ComputeHelper
 	void LoadInputInfo(std::vector<InputInfo>& data, GLuint progId);
 }
 
-template <int numInput, int numOutputBuffer>
-bool CS_Class<numInput, numOutputBuffer>::Init()
-{
-	bool ret = ComputeHelper::CompileShader(sourceName.c_str(), programId);
 
-	if (ret)
-	{
-		ComputeHelper::LoadUniformInfo(myUniformInfo, programId);
-		ComputeHelper::LoadBufferInfo(myBufferInfo, programId);
-	}
 
-#define TRYING_TO_REMOVE_TEMPLATE 1
-#if TRYING_TO_REMOVE_TEMPLATE
-	std::vector<unsigned int> bufferSizeInBytes;
-	ComputeHelper::CalculateBufferSize(myBufferInfo, 1000, bufferSizeInBytes);
-
-	std::vector<GLuint> generatedIds;
-	ComputeHelper::GenerateBuffers(myBufferInfo, bufferSizeInBytes, generatedIds);
-	assert(generatedIds.size() == myBufferInfo.size());
-	myBoundBufferInfo.resize(generatedIds.size());
-	for (int i = 0; i < generatedIds.size(); i++) {
-		myBoundBufferInfo[i].Id = generatedIds[i];
-		myBoundBufferInfo[i].sizeInBytes = bufferSizeInBytes[i];
-	}
-
-#else
-#endif //TRYING_TO_REMOVE_TEMPLATE
-	return ret;
-}
-
-template <int numInput, int numOutputBuffer>
-void CS_Class<numInput, numOutputBuffer>::Dispatch(GLuint dimX, GLuint dimY, GLuint dimZ)
-{
-	//todo.. neeed to merge all params in one array.
-	//although would be easy to force orders of types of param in thee shader. hmmm. .. :S
-
-#if TRYING_TO_REMOVE_TEMPLATE
-	for (int i = 0; i < myBufferInfo.size(); i++)
-	{
-		switch (myBufferInfo[i].type)
-		{
-		case GL_FLOAT_VEC4:
-		case GL_INT_VEC4:
-		case GL_FLOAT: //ComputeInit::TYPE_FLOAT
-		{
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i /*might need to use values from the program info*/, myBoundBufferInfo[i].Id);
-		}break;
-		case GL_ATOMIC_COUNTER_BUFFER:
-		{
-			glBindBufferBase(GL_ATOMIC_COUNTER_BUFFER, i, myBoundBufferInfo[i].Id);
-			GLuint zero = 0;
-			glClearBufferData(GL_ATOMIC_COUNTER_BUFFER, GL_R32UI, GL_RED, GL_UNSIGNED_INT, &zero);
-		} break;
-		default:
-			assert(0);
-			break;
-		}
-	}
-
-	{ // launch compute shaders!
-		glUseProgram(programId);
-		glDispatchCompute(dimX, dimY, dimZ);
-	}
-
-	glUseProgram(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	// make sure writing to image has finished before read
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-#else
-#endif
-}
-
-template <int numInput, int numOutputBuffer>
 template <class bufferType>
-bool CS_Class<numInput, numOutputBuffer>::SetUniformData4x3(const char* name, std::vector<bufferType>& buffer)
+bool CS_Class::SetUniformData4x3(const char* name, std::vector<bufferType>& buffer)
 {
 	//should remove bufferType template
 	GLuint loc = glGetUniformLocation(programId, name);
@@ -196,9 +123,8 @@ bool CS_Class<numInput, numOutputBuffer>::SetUniformData4x3(const char* name, st
 	return true;
 }
 
-template <int numInput, int numOutputBuffer>
 template <class bufferType>
-bool CS_Class<numInput, numOutputBuffer>::SetUniformData3x3(const char* name, std::vector<bufferType>& buffer)
+bool CS_Class::SetUniformData3x3(const char* name, std::vector<bufferType>& buffer)
 {
 	//should remove bufferType template
 	GLuint loc = glGetUniformLocation(programId, name);
@@ -211,46 +137,3 @@ bool CS_Class<numInput, numOutputBuffer>::SetUniformData3x3(const char* name, st
 	glUseProgram(0);
 	return true;
 }
-
-template <int numInput, int numOutputBuffer>
-void CS_Class<numInput, numOutputBuffer>::Dump(int index, std::vector<float>& buffer)
-{
-	assert(index < myBoundBufferInfo.size());
-
-	glBindBuffer(GL_ARRAY_BUFFER, myBoundBufferInfo[index].Id);
-	buffer.resize(myBoundBufferInfo[index].sizeInBytes/sizeof(float));
-	void* pStuff = glMapBuffer(GL_ARRAY_BUFFER, GL_READ_ONLY);
-	memcpy(buffer.data(), pStuff, myBoundBufferInfo[index].sizeInBytes);
-
-	glUnmapBuffer(GL_ARRAY_BUFFER);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
-
-template <int numInput, int numOutputBuffer>
-void CS_Class<numInput, numOutputBuffer>::Dump(int& atomicCount)
-{
-	//glMapBufferRange
-	ChkFence();
-	for (int i = 0; i < numOutputBuffer; i++)
-	{
-		ChkFence();
-		if (outInitParams[i].type == ComputeInit::TYPE_ATOMICCOUNTER)
-		{
-			ChkFence();
-			glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, ids[i]);
-
-			ChkFence();
-			void* pStuff = glMapBuffer(GL_ATOMIC_COUNTER_BUFFER, GL_READ_ONLY);
-			atomicCount = *(uint*)pStuff;
-			ChkFence();
-
-			glUnmapBuffer(GL_ATOMIC_COUNTER_BUFFER);
-			ChkFence();
-			glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, 0);
-			ChkFence();
-		}
-	}
-}
-
-
