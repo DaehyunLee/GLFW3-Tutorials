@@ -51,29 +51,6 @@ ComputeShaders* ComputeShaders::Create()
 	return nullptr;
 }
 
-/*intensionally not using typedefed type to pick up changes*/
-//might be able to improve this by iterating through the compile result of glsl
-void InitExtractDepthParams(CS_Class<1, 1>& shader) {
-	//lets sit on these ducttape codes a bit..
-	//before we generalize anything
-	const int IMAGE_WIDTH = 1000;
-	const int IMAGE_HEIGHT = 1000;
-	shader.inInitParams = { {
-		{ ComputeInit::TYPE_FLOAT, IMAGE_WIDTH, IMAGE_HEIGHT, true },
-		} };
-
-	shader.outInitParams = { {
-		{ ComputeInit::TYPE_VEC4, IMAGE_WIDTH, IMAGE_HEIGHT, true },
-		} };
-
-	shader.dispatchDimensionX = IMAGE_WIDTH;
-	shader.dispatchDimensionY = IMAGE_HEIGHT;
-	shader.dispatchDimensionZ = 1;
-
-	shader.sourceName = "Dummy.glsl";
-}
-
-
 bool ComputeShaders::InitComputeShader()
 {
 	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &work_grp_cnt[0]);
@@ -109,7 +86,11 @@ bool ComputeShaders::InitComputeShader()
 	glBindImageTexture(0, tex_output, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8UI);
 	/////////////////////////////
 
-	InitExtractDepthParams(compute_extract);
+	compute_extract.dispatchDimensionX = 1000;
+	compute_extract.dispatchDimensionY = 1;
+	compute_extract.dispatchDimensionZ = 1;
+	compute_extract.sourceName = "Dummy.glsl";
+
 	compute_extract.Init();
 	
 	return true;

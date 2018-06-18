@@ -138,30 +138,50 @@ namespace ComputeHelper {
 		return true;
 	}
 
-	bool GenerateBuffers(std::vector<BufferInfo>& bufInfo, std::vector<GLuint>& idList)
+	bool CalculateBufferSize(const std::vector<BufferInfo>& bufInfo, unsigned int numElementes, std::vector<unsigned int>& requestSize)
 	{
-		assert(0);
-		const static int temporarySizeInformation_PLZFIX = 10000;
-		idList.resize(bufInfo.size());
+		requestSize.resize(bufInfo.size());
 		for (int i = 0; i < bufInfo.size(); i++)
 		{
-			glGenBuffers(bufInfo.size(), &idList[i]);
-
 			switch (bufInfo[i].type)
 			{
 			case GL_FLOAT_VEC4:
 			{
-				glBindBuffer(GL_ARRAY_BUFFER, idList[i]);
-				glBufferData(GL_ARRAY_BUFFER, temporarySizeInformation_PLZFIX * 4 * sizeof(GLuint), 0, GL_DYNAMIC_DRAW);
-				glBindBuffer(GL_ARRAY_BUFFER, 0);
-			}break;
+				requestSize[i] = sizeof(float) * numElementes * 4;
+			} break;
 			case GL_INT_VEC4:
+			case GL_FLOAT: 
 			{
-			}break;
-			case GL_FLOAT: //ComputeInit::TYPE_FLOAT
+				requestSize[i] = sizeof(float) * numElementes;
+			} break;
+			case GL_ATOMIC_COUNTER_BUFFER:
+			{
+				requestSize[i] = sizeof(GLuint);
+			} break;
+			default:
+				assert(0);
+				return false;
+				break;
+			}
+		}
+
+		return true;
+	}
+
+	bool GenerateBuffers(const std::vector<BufferInfo>& bufInfo, const std::vector<unsigned int>& requestSizeInBytes, std::vector<GLuint>& idList)
+	{
+		idList.resize(bufInfo.size());
+		glGenBuffers(bufInfo.size(), idList.data());
+		for (int i = 0; i < bufInfo.size(); i++)
+		{
+			switch (bufInfo[i].type)
+			{
+			case GL_FLOAT_VEC4:
+			case GL_INT_VEC4:
+			case GL_FLOAT:
 			{
 				glBindBuffer(GL_ARRAY_BUFFER, idList[i]);
-				glBufferData(GL_ARRAY_BUFFER, temporarySizeInformation_PLZFIX * sizeof(GLuint), 0, GL_DYNAMIC_DRAW);
+				glBufferData(GL_ARRAY_BUFFER, requestSizeInBytes[i], 0, GL_DYNAMIC_DRAW);
 				glBindBuffer(GL_ARRAY_BUFFER, 0);
 			}break;
 			case GL_ATOMIC_COUNTER_BUFFER:
@@ -177,6 +197,18 @@ namespace ComputeHelper {
 
 		return true;
 	}
+
+	void UploadDataToBuffer(unsigned int bufferId, const std::vector<float>& data)
+	{
+		glBindBuffer(GL_ARRAY_BUFFER, bufferId);
+
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float)*data.size(), data.data());
+
+		glUnmapBuffer(GL_ARRAY_BUFFER);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	}
+
 
 	void LoadUniformInfo(std::vector<UniformInfo>& data, GLuint progId)
 	{
@@ -225,7 +257,7 @@ namespace ComputeHelper {
 				std::vector<GLint> ret(props.size());
 
 				int len = 0;
-				glGetProgramResourceiv(progId, GL_BUFFER_VARIABLE, i, props.size(), props.data(), sizeof(GLint)*ret.size(), &len, ret.data());
+				glGetProgramResourceiv(progId, GL_BUFFER_VARIABLE, i, props.size(), props.data(), ret.size(), &len, ret.data());
 				data[i].name.resize(ret[0]);
 				data[i].type = ret[1];
 				data[i].stride = ret[5];

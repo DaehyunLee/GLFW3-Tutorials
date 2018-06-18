@@ -20,12 +20,12 @@ int main()
 	{
 		upData[i] = i;
 	}
-	css->compute_extract.UploadData(0, upData);
+
+	ComputeHelper::UploadDataToBuffer(css->compute_extract.myBoundBufferInfo[0].Id, upData);
 	css->compute_extract.Dispatch();
 
-
-	ComputeExtractFeature::debugBuffer buffer;
-	css->compute_extract.Dump(buffer);
+	std::vector <float> dumpTest;
+	css->compute_extract.Dump(1, dumpTest);
 
 	// set OpenGL Options:
 	glm::ivec2 dim = test->getDimension();
