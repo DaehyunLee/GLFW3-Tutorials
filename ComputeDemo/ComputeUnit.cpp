@@ -24,24 +24,35 @@ bool CS_Class::Init()
 {
 	bool ret = ComputeHelper::CompileShader(sourceName.c_str(), programId);
 
-	if (ret)
+	if (!ret)
 	{
-		ComputeHelper::LoadUniformInfo(myUniformInfo, programId);
-		ComputeHelper::LoadBufferInfo(myBufferInfo, programId);
+		return ret;
 	}
 
-	std::vector<unsigned int> bufferSizeInBytes;
-	ComputeHelper::CalculateBufferSize(myBufferInfo, 1000, bufferSizeInBytes);
+	ComputeHelper::LoadUniformInfo(myUniformInfo, programId);
+	ComputeHelper::LoadBufferInfo(myBufferInfo, programId);
 
-	std::vector<GLuint> generatedIds;
-	ComputeHelper::GenerateBuffers(myBufferInfo, bufferSizeInBytes, generatedIds);
-	assert(generatedIds.size() == myBufferInfo.size());
-	myBoundBufferInfo.resize(generatedIds.size());
-	for (int i = 0; i < generatedIds.size(); i++) {
-		myBoundBufferInfo[i].Id = generatedIds[i];
-		myBoundBufferInfo[i].sizeInBytes = bufferSizeInBytes[i];
-	}
+	
 	return ret;
+}
+
+bool CS_Class::CreateBuffers(const glm::ivec3& dimension, std::vector<GLuint>& generatedIds)
+{
+	std::vector<unsigned int> bufferSizeInBytes;
+	ComputeHelper::CalculateBufferSize(myBufferInfo, dimension.x*dimension.y*dimension.z, bufferSizeInBytes);
+
+	if (ComputeHelper::GenerateBuffers(myBufferInfo, bufferSizeInBytes, generatedIds))
+	{
+		assert(generatedIds.size() == myBufferInfo.size());
+		myBoundBufferInfo.resize(generatedIds.size());
+		for (int i = 0; i < generatedIds.size(); i++) {
+			myBoundBufferInfo[i].Id = generatedIds[i];
+			myBoundBufferInfo[i].sizeInBytes = bufferSizeInBytes[i];
+		}
+		return true;
+	}
+
+	return false;
 }
 
 void CS_Class::Dispatch(GLuint dimX, GLuint dimY, GLuint dimZ)
@@ -83,6 +94,20 @@ void CS_Class::Dispatch(GLuint dimX, GLuint dimY, GLuint dimZ)
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 }
 
+bool CS_Class::SetUniformImg(const char* name, unsigned int texId)
+{
+	//should remove bufferType template
+	GLuint loc = glGetUniformLocation(programId, name);
+	assert(loc != -1);
+
+	glUseProgram(programId);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindImageTexture(0, texId, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA32F);
+
+	glUseProgram(0);
+	return true;
+}
 
 void CS_Class::Dump(int index, std::vector<float>& buffer)
 {
@@ -290,6 +315,7 @@ namespace ComputeHelper {
 				glBindBuffer(GL_ATOMIC_COUNTER_BUFFER, 0);
 			} break;
 			default:
+				return false;
 				break;
 			}
 		}
@@ -300,12 +326,8 @@ namespace ComputeHelper {
 	void UploadDataToBuffer(unsigned int bufferId, const std::vector<float>& data)
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, bufferId);
-
 		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float)*data.size(), data.data());
-
-		glUnmapBuffer(GL_ARRAY_BUFFER);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
-
 	}
 
 

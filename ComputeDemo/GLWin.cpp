@@ -34,7 +34,7 @@ GLFWWin::GLFWWin(int width, int height)
 
 	// Setup Matrix:
 	m_m4Projection = glm::perspective(45.0f, float(m_uiWidth) / float(m_uiHeight), 0.1f, 1000.0f);
-	m_m4ViewMatrix = glm::lookAt(glm::vec3(8, 8, 8), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+	m_m4ViewMatrix = glm::lookAt(glm::vec3(4, 4, 4), glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
 }
 
 

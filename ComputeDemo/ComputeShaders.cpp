@@ -72,20 +72,6 @@ bool ComputeShaders::InitComputeShader()
 	glGetIntegerv(GL_MAX_ATOMIC_COUNTER_BUFFER_SIZE, &max_counters);
 	printf("\tmax atomic counter %i\n", max_counters);
 
-	///////////////////
-	GLuint tex_output;
-	glGenTextures(1, &tex_output);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex_output);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, tex_w, tex_h);/*/
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, tex_w, tex_h, 0, GL_RGBA, GL_FLOAT, NULL);/*/
-	glBindImageTexture(0, tex_output, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8UI);
-	/////////////////////////////
-
 	compute_extract.dispatchDimensionX = 1000;
 	compute_extract.dispatchDimensionY = 1;
 	compute_extract.dispatchDimensionZ = 1;

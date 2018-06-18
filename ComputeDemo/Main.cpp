@@ -13,13 +13,30 @@ int main()
 	RenderSample* sample = RenderSample::Create();
 	ComputeShaders* css = ComputeShaders::Create();
 
+	glm::ivec2 imageSize(256, 256);//this magic number is the size of sample->m_textureId
+
+	//create buffers
+	std::vector<GLuint> createdBuffers;
+	css->compute_extract.CreateBuffers(glm::ivec3(imageSize.x, imageSize.y, 1), createdBuffers);
+
 	std::vector<float> kbuf = { 77.f, 88.f, 99.f, 77.f, 88.f, 99.f, 77.f, 88.f, 99.f };
 	css->compute_extract.SetUniformData3x3("K", kbuf);
-	std::vector<float> upData(1000);
-	for (int i = 0; i < upData.size(); i++)
-	{
-		upData[i] = i;
+	css->compute_extract.SetUniformData3x3("D", kbuf);
+
+	//some dummy data to upload..
+	std::vector<float> upData(imageSize.x*imageSize.y);
+	for (int i = 0; i < upData.size(); i++){
+		upData[i] = (float)(upData.size()-i)/(float)upData.size(); // 0.f~1.f
 	}
+
+	//set dispatch size to worker/pixel
+	css->compute_extract.dispatchDimensionX = imageSize.x;
+	css->compute_extract.dispatchDimensionY = imageSize.y;
+	css->compute_extract.dispatchDimensionZ = 1;
+
+
+	css->compute_extract.SetUniformImg("img_output", sample->m_textureId);
+	assert(glGetError() == 0);
 
 	ComputeHelper::UploadDataToBuffer(css->compute_extract.myBoundBufferInfo[0].Id, upData);
 	css->compute_extract.Dispatch();
@@ -42,6 +59,7 @@ int main()
 
 		// clear the backbuffer to our clear colour and clear the depth buffer
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		css->compute_extract.SetUniformImg("img_output", sample->m_textureId);
 		css->compute_extract.Dispatch();
 
 		glm::mat4 identity;

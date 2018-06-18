@@ -15,12 +15,12 @@ layout(std430, binding = 0) buffer InputData
 	float inputData[]; 
 };
 
-layout( std430, binding= 1 ) buffer OutData
+layout(std430, binding = 1) buffer OutData
 { 
 	vec4 outData[]; 
 };
 
-layout(rgba8ui, binding = 4) uniform uimage2D img_output;
+layout(rgba32f, binding = 0) uniform image2D img_output;
 
 void main () {
 	uint index = gl_GlobalInvocationID.z * gl_NumWorkGroups.x * gl_NumWorkGroups.y +
@@ -28,17 +28,17 @@ void main () {
 		gl_GlobalInvocationID.x;
 
 	ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
-	uvec4 pix = imageLoad(img_output, pixel_coords.xy);
-
+	vec4 pix = imageLoad(img_output, pixel_coords.xy);
 
 	vec3 val = vec3(gl_GlobalInvocationID.x, gl_GlobalInvocationID.y, gl_GlobalInvocationID.z);
-	vec3 ret = val*(K*D);
-	
+	vec3 ret = val*(K*D) * index * inputData[index];//random line to keep K and D not optimized away
 
-	//outData[index] = vec4( ret.xyz, index);
-	//outData[index] = inputData[index];
-	outData[index].x = inputData[index];
-	outData[index].y = inputData[4] + pix.r;
-	outData[index].z = ret.x;
-	outData[index].w = index;
+	//dumping random stuff.
+	outData[index].x = pix.r;
+	outData[index].y = pix.b;
+	outData[index].z = pixel_coords.x;
+	outData[index].w = ret.x;
+
+	pix.rgb = pix.rgb + 0.01f*inputData[index];
+	imageStore(img_output, pixel_coords.xy, pix);
 }

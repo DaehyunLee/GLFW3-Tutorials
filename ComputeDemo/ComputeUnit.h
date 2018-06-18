@@ -10,12 +10,14 @@ struct BufferInfo {
 	std::string name;
 	GLenum type;
 	int stride;
+	GLuint Loc;
 };
 
 struct BoundBufferInfo
 {
 	unsigned int sizeInBytes;
 
+	GLuint Loc;
 	GLuint Id;
 };
 
@@ -67,6 +69,12 @@ public:
 	GLuint programId;
 
 	bool Init();
+
+	//this is purely a convenience feature.. 
+	//having buffers separated with shaders seems more intuitive
+	bool CreateBuffers(const glm::ivec3& dimension, std::vector<GLuint>& generatedIds);
+
+
 	void Dispatch()
 	{
 		Dispatch(dispatchDimensionX, dispatchDimensionY, dispatchDimensionZ);
@@ -78,6 +86,7 @@ public:
 
 	template <class bufferType>
 	bool SetUniformData3x3(const char* name, std::vector<bufferType>& buffer);
+	bool SetUniformImg(const char* name, unsigned int texId);
 
 	void Dump(int index, std::vector<float>& buffer);
 	void Dump(int& atomicCount);
@@ -103,8 +112,6 @@ namespace ComputeHelper
 	void LoadBufferInfo(std::vector<BufferInfo>& data, GLuint progId);
 	void LoadInputInfo(std::vector<InputInfo>& data, GLuint progId);
 }
-
-
 
 template <class bufferType>
 bool CS_Class::SetUniformData4x3(const char* name, std::vector<bufferType>& buffer)

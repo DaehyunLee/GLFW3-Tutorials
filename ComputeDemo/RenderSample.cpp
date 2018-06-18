@@ -26,7 +26,7 @@ const char *c_szPixelShader = "#version 330\n"
 "uniform sampler2D diffuseTexture;\n"
 "void main()\n"
 "{\n"
-"outColour = texture2D(diffuseTexture, vUV) + vColour;\n"
+"outColour = texture2D(diffuseTexture, vUV)/* + vColour*/;\n"
 "}\n"
 "\n";
 
@@ -157,12 +157,11 @@ bool RenderSample::Init()
 		for (int j = 0; j < 256; ++j)
 		{
 			if (j % 2 == 0)
-				ptexData[i + j] = glm::vec4(0, 0, 0, 1);
+				ptexData[i + j] = glm::vec4(0.22f, 0.23f, 0.24f, 1);
 			else
-				ptexData[i + j] = glm::vec4(1, 1, 1, 1);
+				ptexData[i + j] = glm::vec4(0.f, 0.94f, 0.95f, 1);
 		}
 	}
-
 
 	glGenTextures(1, &m_textureId);
 	glBindTexture(GL_TEXTURE_2D, m_textureId);
