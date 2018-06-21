@@ -55,7 +55,7 @@ int main()
 	{
 		// Keep Running!
 		// get delta time for this iteration:
-		float fDeltaTime = (float)glfwGetTime();
+		float fDeltaTime = (float)test->GetElapsedTime();
 
 		// clear the backbuffer to our clear colour and clear the depth buffer
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -68,7 +68,7 @@ int main()
 		test->SwapBuffers();
 
 		// join second render thread
-		glfwPollEvents(); // process events!
+		test->PumpEvent();
 	}
     return 0;
 }
